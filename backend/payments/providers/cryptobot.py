@@ -6,6 +6,8 @@ TeleBoost CryptoBot Provider
 import json
 import logging
 import requests
+import hmac
+import hashlib
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -29,6 +31,7 @@ class CryptoBotProvider(BasePaymentProvider):
         super().__init__()
         self.name = 'cryptobot'
         self.api_token = config.CRYPTOBOT_TOKEN
+        self.webhook_token = config.CRYPTOBOT_WEBHOOK_TOKEN
         self.base_url = 'https://pay.crypt.bot/api'
 
         # Тестовий режим
@@ -45,6 +48,30 @@ class CryptoBotProvider(BasePaymentProvider):
             'Crypto-Pay-API-Token': self.api_token,
             'Content-Type': 'application/json'
         })
+
+    def verify_webhook_signature(self, signature: str, body: str) -> bool:
+        """
+        Перевірка підпису webhook
+
+        Args:
+            signature: Підпис з заголовка X-Crypto-Bot-Api-Signature
+            body: Тіло запиту
+
+        Returns:
+            True якщо підпис валідний
+        """
+        # Використовуємо webhook token якщо він є, інакше api token
+        secret_key = self.webhook_token or self.api_token
+
+        # Обчислюємо очікуваний підпис
+        expected_signature = hmac.new(
+            key=secret_key.encode('utf-8'),
+            msg=body.encode('utf-8'),
+            digestmod=hashlib.sha256
+        ).hexdigest()
+
+        # Безпечне порівняння
+        return hmac.compare_digest(signature, expected_signature)
 
     def get_supported_currencies(self) -> List[str]:
         """Отримати підтримувані валюти"""

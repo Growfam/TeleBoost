@@ -24,14 +24,18 @@ class Config:
     PORT = int(os.getenv('PORT', 5000))
     HOST = '0.0.0.0'  # Railway вимагає 0.0.0.0
 
-    # URLs
-    BACKEND_URL = os.getenv('BACKEND_URL', 'https://teleboost-teleboost.up.railway.app')
-    FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://teleboost-teleboost.up.railway.app')
+    # URLs - використовуємо змінні з Railway
+    BACKEND_URL = os.getenv('API_URL', 'https://teleboost-teleboost.up.railway.app')
+    FRONTEND_URL = os.getenv('APP_URL', 'https://teleboost-teleboost.up.railway.app')
 
-    # Database - Supabase
+    # Додаткові URL для сумісності
+    API_URL = os.getenv('API_URL', BACKEND_URL)
+    APP_URL = os.getenv('APP_URL', FRONTEND_URL)
+
+    # Database - Supabase (виправлено відповідно до Railway)
     SUPABASE_URL = os.getenv('SUPABASE_URL', '')
     SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')
-    SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY', '')
+    SUPABASE_ANON_KEY = os.getenv('SUPABASE_KEY', '')  # Змінено з SUPABASE_ANON_KEY на SUPABASE_KEY
 
     # Redis
     REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
@@ -64,17 +68,33 @@ class Config:
     NAKRUTOCHKA_API_URL = os.getenv('NAKRUTOCHKA_API_URL', 'https://nakrutochka.com/api/v2')
     NAKRUTOCHKA_API_KEY = os.getenv('NAKRUTOCHKA_API_KEY', '')
 
-    # CryptoBot
-    CRYPTOBOT_TOKEN = os.getenv('CRYPTOBOT_TOKEN', '')
+    # CryptoBot (виправлено відповідно до Railway)
+    CRYPTOBOT_TOKEN = os.getenv('CRYPTOBOT_API_TOKEN', '')  # Змінено на CRYPTOBOT_API_TOKEN
+    CRYPTOBOT_API_TOKEN = os.getenv('CRYPTOBOT_API_TOKEN', '')  # Для сумісності
+    CRYPTOBOT_WEBHOOK_TOKEN = os.getenv('CRYPTOBOT_WEBHOOK_TOKEN', '')  # Додано
     CRYPTOBOT_WEBHOOK_PATH = '/api/webhooks/cryptobot'
     CRYPTOBOT_NETWORK = os.getenv('CRYPTOBOT_NETWORK', 'mainnet')  # або 'testnet' для тестування
-    CRYPTOBOT_WEBHOOK_SECRET = os.getenv('CRYPTOBOT_WEBHOOK_SECRET', '')
+    CRYPTOBOT_WEBHOOK_SECRET = os.getenv('CRYPTOBOT_WEBHOOK_TOKEN', '')  # Використовуємо WEBHOOK_TOKEN
 
     # NOWPayments
     NOWPAYMENTS_API_KEY = os.getenv('NOWPAYMENTS_API_KEY', '')
     NOWPAYMENTS_IPN_SECRET = os.getenv('NOWPAYMENTS_IPN_SECRET', '')
     NOWPAYMENTS_WEBHOOK_PATH = '/api/webhooks/nowpayments'
     NOWPAYMENTS_SANDBOX = os.getenv('NOWPAYMENTS_SANDBOX', 'false').lower() == 'true'
+
+    # Payment Methods (додано з Railway)
+    PAYMENT_METHODS = os.getenv('PAYMENT_METHODS', 'cryptobot,nowpayments').split(',')
+
+    # Withdrawal Addresses (додано з Railway)
+    WITHDRAWAL_ADDRESSES = {
+        'USDT_TRC20': os.getenv('USDT_TRC20_ADDRESS', ''),
+        'USDT_BEP20': os.getenv('USDT_BEP20_ADDRESS', ''),
+        'USDT_SOL': os.getenv('USDT_SOLANA_ADDRESS', ''),
+        'USDT_TON': os.getenv('USDT_TON_ADDRESS', ''),
+    }
+
+    # USDT Exchange Rate
+    USDT_TO_UAH_RATE = float(os.getenv('USDT_TO_UAH_RATE', '40.0'))
 
     # Rate Limiting
     RATELIMIT_ENABLED = True
@@ -110,16 +130,16 @@ class Config:
     REFERRAL_BONUS_PERCENT = 7.0  # 7% для першого рівня
     REFERRAL_BONUS_LEVEL2_PERCENT = 2.5  # 2.5% для другого рівня
     REFERRAL_USER_BONUS = 0.0  # Бонус для нового користувача (вимкнено)
-    MIN_DEPOSIT = 100  # Мінімальний депозит в UAH
-    MAX_DEPOSIT = 100000  # Максимальний депозит в UAH
-    MIN_WITHDRAW = 500  # Мінімальне виведення в UAH
-    MAX_WITHDRAW = 50000  # Максимальне виведення в UAH
-    MIN_ORDER = 10  # Мінімальне замовлення в UAH
-    MAX_ORDER = 100000  # Максимальне замовлення в UAH
+    MIN_DEPOSIT = float(os.getenv('MIN_PAYMENT_USD', '10'))  # Мінімальний депозит в USD
+    MAX_DEPOSIT = 100000  # Максимальний депозит в USD
+    MIN_WITHDRAW = 10  # Мінімальне виведення в USD
+    MAX_WITHDRAW = 50000  # Максимальне виведення в USD
+    MIN_ORDER = 1  # Мінімальне замовлення в USD
+    MAX_ORDER = 100000  # Максимальне замовлення в USD
 
     # Currency Settings
     DEFAULT_CURRENCY = 'USD'
-    SUPPORTED_CURRENCIES = ['USD', 'UAH', 'EUR']
+    SUPPORTED_CURRENCIES = ['USD', 'UAH', 'EUR', 'USDT']
     EXCHANGE_RATES_UPDATE_INTERVAL = 3600  # 1 година
 
     # Logging
@@ -241,6 +261,8 @@ class Config:
             'DEBUG': cls.DEBUG,
             'BACKEND_URL': cls.BACKEND_URL,
             'FRONTEND_URL': cls.FRONTEND_URL,
+            'API_URL': cls.API_URL,
+            'APP_URL': cls.APP_URL,
             'BOT_USERNAME': cls.BOT_USERNAME,
             'REFERRAL_BONUS_PERCENT': cls.REFERRAL_BONUS_PERCENT,
             'REFERRAL_BONUS_LEVEL2_PERCENT': cls.REFERRAL_BONUS_LEVEL2_PERCENT,
@@ -257,6 +279,8 @@ class Config:
             'DEFAULT_PAGE_SIZE': cls.DEFAULT_PAGE_SIZE,
             'MAX_PAGE_SIZE': cls.MAX_PAGE_SIZE,
             'CACHE_TTL': cls.CACHE_TTL,
+            'PAYMENT_METHODS': cls.PAYMENT_METHODS,
+            'USDT_TO_UAH_RATE': cls.USDT_TO_UAH_RATE,
         }
 
     @classmethod
@@ -268,6 +292,17 @@ class Config:
     def is_feature_enabled(cls, feature: str) -> bool:
         """Перевірити чи увімкнена функція"""
         return cls.FEATURES.get(feature, False)
+
+    @classmethod
+    def is_payment_method_enabled(cls, method: str) -> bool:
+        """Перевірити чи увімкнений метод оплати"""
+        return method.lower() in [m.lower() for m in cls.PAYMENT_METHODS]
+
+    @classmethod
+    def get_withdrawal_address(cls, currency: str, network: str) -> Optional[str]:
+        """Отримати адресу для виведення"""
+        key = f"{currency}_{network}".upper()
+        return cls.WITHDRAWAL_ADDRESSES.get(key)
 
 
 # Створюємо екземпляр конфігурації
