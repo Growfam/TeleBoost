@@ -14,16 +14,11 @@ logger = logging.getLogger(__name__)
 class BasePaymentProvider(ABC):
     """Базовий клас для всіх платіжних провайдерів"""
 
-    def __init__(self, config: Dict[str, Any]):
-        """
-        Ініціалізація провайдера
-
-        Args:
-            config: Конфігурація провайдера
-        """
-        self.config = config
+    def __init__(self):
+        """Ініціалізація провайдера"""
         self.name = self.__class__.__name__.replace('Provider', '')
         self.is_active = True
+        self.config = {}  # Дочірні класи можуть переписати це
 
     @abstractmethod
     def create_payment(self, amount: Decimal, currency: str,
@@ -79,7 +74,6 @@ class BasePaymentProvider(ABC):
         """
         pass
 
-    @abstractmethod
     def get_supported_currencies(self) -> List[str]:
         """
         Отримати список підтримуваних валют
@@ -87,9 +81,9 @@ class BasePaymentProvider(ABC):
         Returns:
             Список валют (коди)
         """
-        pass
+        # Базова реалізація - дочірні класи можуть переписати
+        return []
 
-    @abstractmethod
     def get_payment_limits(self, currency: str) -> Dict[str, Decimal]:
         """
         Отримати ліміти для валюти
@@ -100,7 +94,11 @@ class BasePaymentProvider(ABC):
         Returns:
             Dict з полями min та max
         """
-        pass
+        # Базова реалізація - дочірні класи можуть переписати
+        return {
+            'min': Decimal('0.01'),
+            'max': Decimal('999999.99')
+        }
 
     def validate_amount(self, amount: Decimal, currency: str) -> bool:
         """

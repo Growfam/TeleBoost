@@ -6,7 +6,7 @@ TeleBoost Payments Package
 
 from backend.payments.models import Payment, PaymentMethod
 from backend.payments.services import (
-    PaymentService,
+    payment_service,  # Екземпляр сервісу
     create_payment,
     get_payment,
     check_payment_status,
@@ -14,6 +14,7 @@ from backend.payments.services import (
     get_user_payments,
     get_available_methods,
     get_payment_limits,
+    calculate_crypto_amount,
 )
 from backend.payments.validators import (
     validate_payment_amount,
@@ -27,8 +28,8 @@ __all__ = [
     'Payment',
     'PaymentMethod',
 
-    # Service
-    'PaymentService',
+    # Service instance
+    'payment_service',
 
     # Functions
     'create_payment',
@@ -38,6 +39,7 @@ __all__ = [
     'get_user_payments',
     'get_available_methods',
     'get_payment_limits',
+    'calculate_crypto_amount',
 
     # Validators
     'validate_payment_amount',

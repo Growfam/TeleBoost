@@ -1,365 +1,318 @@
 # backend/utils/constants.py
 """
 TeleBoost Constants
-Всі константи проекту в одному місці
+Централізовані константи проекту
 """
-from enum import Enum
 from typing import Dict, Any
 
 
-class ORDER_STATUS:
-    """Статуси замовлень"""
-    PENDING = 'pending'
-    PROCESSING = 'processing'
-    IN_PROGRESS = 'in_progress'
-    COMPLETED = 'completed'
-    PARTIAL = 'partial'
-    CANCELLED = 'cancelled'
-    FAILED = 'failed'
-
-    @classmethod
-    def all(cls) -> list:
-        return [cls.PENDING, cls.PROCESSING, cls.IN_PROGRESS,
-                cls.COMPLETED, cls.PARTIAL, cls.CANCELLED, cls.FAILED]
-
-    @classmethod
-    def active(cls) -> list:
-        return [cls.PENDING, cls.PROCESSING, cls.IN_PROGRESS]
-
-    @classmethod
-    def final(cls) -> list:
-        return [cls.COMPLETED, cls.PARTIAL, cls.CANCELLED, cls.FAILED]
-
+# === Payment Constants ===
 
 class PAYMENT_STATUS:
     """Статуси платежів"""
-    WAITING = 'waiting'
-    CONFIRMING = 'confirming'
-    CONFIRMED = 'confirmed'
-    SENDING = 'sending'
-    PARTIALLY_PAID = 'partially_paid'
-    FINISHED = 'finished'
-    FAILED = 'failed'
-    REFUNDED = 'refunded'
-    EXPIRED = 'expired'
+    WAITING = 'waiting'  # Очікує оплати
+    CONFIRMING = 'confirming'  # Підтверджується мережею
+    CONFIRMED = 'confirmed'  # Підтверджено
+    SENDING = 'sending'  # Відправляється
+    PARTIALLY_PAID = 'partially_paid'  # Частково оплачено
+    FINISHED = 'finished'  # Завершено
+    FAILED = 'failed'  # Невдалий
+    REFUNDED = 'refunded'  # Повернено
+    EXPIRED = 'expired'  # Прострочено
+    PROCESSING = 'processing'  # Обробляється
 
     @classmethod
-    def all(cls) -> list:
-        return [cls.WAITING, cls.CONFIRMING, cls.CONFIRMED, cls.SENDING,
-                cls.PARTIALLY_PAID, cls.FINISHED, cls.FAILED, cls.REFUNDED, cls.EXPIRED]
+    def all(cls):
+        """Всі статуси"""
+        return [
+            cls.WAITING, cls.CONFIRMING, cls.CONFIRMED, cls.SENDING,
+            cls.PARTIALLY_PAID, cls.FINISHED, cls.FAILED,
+            cls.REFUNDED, cls.EXPIRED, cls.PROCESSING
+        ]
 
-    @classmethod
-    def success(cls) -> list:
-        return [cls.CONFIRMED, cls.FINISHED]
 
-    @classmethod
-    def pending(cls) -> list:
-        return [cls.WAITING, cls.CONFIRMING, cls.SENDING, cls.PARTIALLY_PAID]
+class PAYMENT_PROVIDERS:
+    """Платіжні провайдери"""
+    CRYPTOBOT = 'cryptobot'
+    NOWPAYMENTS = 'nowpayments'
+    MONOBANK = 'monobank'
 
+
+# === Transaction Types ===
 
 class TRANSACTION_TYPE:
     """Типи транзакцій"""
-    DEPOSIT = 'deposit'
-    WITHDRAW = 'withdraw'
-    ORDER = 'order'
-    REFUND = 'refund'
-    REFERRAL_BONUS = 'referral_bonus'
-    CASHBACK = 'cashback'
-    ADMIN_CREDIT = 'admin_credit'
-    ADMIN_DEBIT = 'admin_debit'
+    DEPOSIT = 'deposit'  # Поповнення
+    WITHDRAWAL = 'withdrawal'  # Виведення
+    ORDER = 'order'  # Оплата замовлення
+    REFERRAL_BONUS = 'referral_bonus'  # Реферальний бонус
+    REFUND = 'refund'  # Повернення
+    ADMIN_ADD = 'admin_add'  # Адмін додав
+    ADMIN_DEDUCT = 'admin_deduct'  # Адмін зняв
+    PROMO_BONUS = 'promo_bonus'  # Промо бонус
+
+
+# === Order Status ===
+
+class OrderStatus:
+    """Статуси замовлень"""
+    PENDING = 'Pending'
+    IN_PROGRESS = 'In progress'
+    PROCESSING = 'Processing'
+    COMPLETED = 'Completed'
+    PARTIAL = 'Partial'
+    CANCELLED = 'Cancelled'
+    FAILED = 'Failed'
 
     @classmethod
-    def income(cls) -> list:
-        return [cls.DEPOSIT, cls.REFUND, cls.REFERRAL_BONUS, cls.CASHBACK, cls.ADMIN_CREDIT]
+    def all(cls):
+        return [
+            cls.PENDING, cls.IN_PROGRESS, cls.PROCESSING,
+            cls.COMPLETED, cls.PARTIAL, cls.CANCELLED, cls.FAILED
+        ]
 
-    @classmethod
-    def expense(cls) -> list:
-        return [cls.WITHDRAW, cls.ORDER, cls.ADMIN_DEBIT]
 
+# === Service Types ===
 
-class SERVICE_TYPE:
-    """Типи сервісів Nakrutochka"""
+class ServiceType:
+    """Типи сервісів"""
     DEFAULT = 'default'
-    PACKAGE = 'package'
-    CUSTOM_COMMENTS = 'custom_comments'
-    CUSTOM_COMMENTS_PACKAGE = 'custom_comments_package'
-    MENTIONS = 'mentions'
-    MENTIONS_WITH_HASHTAGS = 'mentions_with_hashtags'
-    MENTIONS_CUSTOM_LIST = 'mentions_custom_list'
-    MENTIONS_HASHTAG = 'mentions_hashtag'
-    MENTIONS_USER_FOLLOWERS = 'mentions_user_followers'
-    MENTIONS_MEDIA_LIKERS = 'mentions_media_likers'
-    PACKAGE_TEXT = 'package_text'
-    COMMENT_LIKES = 'comment_likes'
-    POLL = 'poll'
-    INVITES_FROM_GROUPS = 'invites_from_groups'
-    SUBSCRIPTIONS = 'subscriptions'
     DRIP_FEED = 'drip_feed'
+    CUSTOM_COMMENTS = 'custom_comments'
     SUBSCRIPTION = 'subscription'
+    POLL = 'poll'
 
 
-# Референтні винагороди - ОНОВЛЕНО для дворівневої системи
-REFERRAL_LEVELS = {
-    1: 0.07,   # 7% для прямого реферала
-    2: 0.025,  # 2.5% для реферала другого рівня
+SERVICE_TYPE = ServiceType  # Для сумісності
+
+# === Crypto Currencies ===
+
+CRYPTO_CURRENCIES = {
+    'USDT': {
+        'name': 'Tether',
+        'symbol': 'USDT',
+        'decimals': 6,
+        'networks': ['TRC20', 'BEP20', 'ERC20', 'SOL', 'TON']
+    },
+    'BTC': {
+        'name': 'Bitcoin',
+        'symbol': 'BTC',
+        'decimals': 8,
+        'networks': ['Bitcoin']
+    },
+    'ETH': {
+        'name': 'Ethereum',
+        'symbol': 'ETH',
+        'decimals': 18,
+        'networks': ['Ethereum']
+    },
+    'TON': {
+        'name': 'Toncoin',
+        'symbol': 'TON',
+        'decimals': 9,
+        'networks': ['TON']
+    },
+    'BNB': {
+        'name': 'Binance Coin',
+        'symbol': 'BNB',
+        'decimals': 18,
+        'networks': ['BEP20']
+    },
+    'TRX': {
+        'name': 'Tron',
+        'symbol': 'TRX',
+        'decimals': 6,
+        'networks': ['Tron']
+    },
+    'BUSD': {
+        'name': 'Binance USD',
+        'symbol': 'BUSD',
+        'decimals': 18,
+        'networks': ['BEP20', 'ERC20']
+    }
 }
 
-# Ліміти
+# === Business Limits ===
+
 LIMITS = {
-    'MIN_DEPOSIT': 100,
-    'MAX_DEPOSIT': 100000,
-    'MIN_WITHDRAW': 500,
-    'MAX_WITHDRAW': 50000,
-    'MIN_ORDER': 10,
-    'MAX_ORDER': 100000,
-    'MAX_REFERRAL_LEVELS': 2,  # Два рівні рефералів
-    'MAX_COMMENT_LENGTH': 1000,  # Максимальна довжина коментаря
-    'MAX_COMMENTS_PER_ORDER': 10000,  # Максимум коментарів в замовленні
-    'MAX_ACTIVE_ORDERS': 50,  # Максимум активних замовлень на користувача
+    'MIN_DEPOSIT': 100,  # Мінімальний депозит (UAH)
+    'MAX_DEPOSIT': 100000,  # Максимальний депозит (UAH)
+    'MIN_WITHDRAW': 500,  # Мінімальне виведення (UAH)
+    'MAX_WITHDRAW': 50000,  # Максимальне виведення (UAH)
+    'MIN_ORDER': 10,  # Мінімальне замовлення (UAH)
+    'MAX_ORDER': 100000,  # Максимальне замовлення (UAH)
 }
 
-# Комісії
+# === Fees ===
+
 FEES = {
-    'DEPOSIT': 0.0,  # 0% комісія на поповнення
-    'WITHDRAW': 0.03,  # 3% комісія на виведення
-    'ORDER': 0.0,  # 0% комісія на замовлення
+    'DEPOSIT': 0,  # Комісія за депозит (%)
+    'WITHDRAWAL': 2.5,  # Комісія за виведення (%)
+    'SERVICE_MARKUP': 30,  # Націнка на сервіси (%)
 }
 
+# === Cache Keys ===
 
-# Cache ключі
-class CACHE_KEYS:
-    """Префікси для Redis ключів"""
-    USER = 'user:{user_id}'
-    USER_BALANCE = 'balance:{user_id}'
-    USER_ORDERS = 'orders:{user_id}'
-    USER_REFERRALS = 'referrals:{user_id}'
-    SERVICES = 'services:all'
-    SERVICE = 'service:{service_id}'
-    ORDER = 'order:{order_id}'
-    PAYMENT = 'payment:{payment_id}'
-    JWT_TOKEN = 'jwt:{jti}'
-    RATE_LIMIT = 'rate:{user_id}:{endpoint}'
-
-    @classmethod
-    def format(cls, key: str, **kwargs) -> str:
-        """Форматування ключа з параметрами"""
-        return key.format(**kwargs)
-
-
-# Cache префікси для middleware
-CACHE_PREFIX = {
-    'services': 'cache:services',
-    'users': 'cache:users',
-    'orders': 'cache:orders',
-    'response': 'response:',
-    'statistics': 'cache:stats',
-    'referrals': 'cache:referrals',
+CACHE_KEYS = {
+    'USER': 'user:{user_id}',
+    'SERVICES': 'services:all',
+    'SERVICE': 'service:{service_id}',
+    'BALANCE': 'balance:{user_id}',
+    'ORDERS': 'orders:{user_id}',
+    'ORDER': 'order:{order_id}',
+    'REFERRALS': 'referrals:{user_id}',
+    'PAYMENT': 'payment:{payment_id}',
+    'RATES': 'rates:{from_currency}:{to_currency}',
+    'STATS': 'stats:{key}',
 }
 
-# Cache TTL для різних типів даних
+# === Cache TTL (seconds) ===
+
 CACHE_TTL = {
     'services': 3600,  # 1 година
     'user': 300,  # 5 хвилин
     'balance': 60,  # 1 хвилина
     'orders': 180,  # 3 хвилини
     'referrals': 600,  # 10 хвилин
-    'statistics': 300,  # 5 хвилин
-    'exchange_rates': 3600,  # 1 година
+    'rates': 300,  # 5 хвилин
+    'stats': 300,  # 5 хвилин
 }
 
-# Telegram limits
-TELEGRAM_LIMITS = {
-    'USERNAME_MIN_LENGTH': 5,
-    'USERNAME_MAX_LENGTH': 32,
-    'FIRST_NAME_MAX_LENGTH': 64,
-    'LAST_NAME_MAX_LENGTH': 64,
-    'MESSAGE_MAX_LENGTH': 4096,
-    'CAPTION_MAX_LENGTH': 1024,
-    'CALLBACK_DATA_MAX_LENGTH': 64,
-}
+# === Messages ===
 
-# Error messages
-ERROR_MESSAGES = {
-    'INVALID_TOKEN': 'Недійсний токен авторизації',
-    'TOKEN_EXPIRED': 'Токен авторизації закінчився',
-    'USER_NOT_FOUND': 'Користувача не знайдено',
-    'INSUFFICIENT_BALANCE': 'Недостатньо коштів на балансі',
-    'SERVICE_NOT_FOUND': 'Сервіс не знайдено',
-    'INVALID_ORDER_DATA': 'Некоректні дані замовлення',
-    'ORDER_NOT_FOUND': 'Замовлення не знайдено',
-    'PAYMENT_NOT_FOUND': 'Платіж не знайдено',
-    'INVALID_AMOUNT': 'Некоректна сума',
-    'LIMIT_EXCEEDED': 'Перевищено ліміт',
-    'RATE_LIMIT': 'Занадто багато запитів',
-    'INTERNAL_ERROR': 'Внутрішня помилка сервера',
-    'MAINTENANCE_MODE': 'Сервіс на технічному обслуговуванні',
-    'FEATURE_DISABLED': 'Ця функція тимчасово недоступна',
-    'INVALID_REFERRAL_CODE': 'Недійсний реферальний код',
-    'SELF_REFERRAL': 'Не можна використовувати власний реферальний код',
-    'ALREADY_REFERRED': 'Ви вже були запрошені іншим користувачем',
-}
-
-# Success messages
 SUCCESS_MESSAGES = {
-    'LOGIN_SUCCESS': 'Успішна авторизація',
-    'ORDER_CREATED': 'Замовлення створено',
+    'LOGIN_SUCCESS': 'Успішний вхід',
+    'LOGOUT_SUCCESS': 'Ви вийшли з системи',
     'PAYMENT_CREATED': 'Платіж створено',
-    'PAYMENT_SUCCESS': 'Платіж успішно оброблено',
-    'BALANCE_UPDATED': 'Баланс оновлено',
-    'WITHDRAWAL_REQUESTED': 'Запит на виведення прийнято',
+    'ORDER_CREATED': 'Замовлення створено',
+    'SERVICE_UPDATED': 'Сервіс оновлено',
     'PROFILE_UPDATED': 'Профіль оновлено',
-    'REFERRAL_ACTIVATED': 'Реферальний код активовано',
+    'PASSWORD_CHANGED': 'Пароль змінено',
+    'WITHDRAWAL_REQUESTED': 'Запит на виведення створено',
 }
 
-# Nakrutochka API endpoints (Legacy - for compatibility)
-NAKRUTOCHKA_ENDPOINTS = {
-    'SERVICES': '/services',
-    'ORDER': '/order',
-    'STATUS': '/status',
-    'MULTI_STATUS': '/multi-status',
-    'BALANCE': '/balance',
-    'REFILL': '/refill',
-    'REFILL_STATUS': '/refill-status',
-    'CANCEL': '/cancel',
+ERROR_MESSAGES = {
+    'UNAUTHORIZED': 'Unauthorized access',
+    'INVALID_TOKEN': 'Invalid or expired token',
+    'USER_NOT_FOUND': 'User not found',
+    'INVALID_CREDENTIALS': 'Invalid credentials',
+    'INSUFFICIENT_BALANCE': 'Insufficient balance',
+    'SERVICE_NOT_FOUND': 'Service not found',
+    'ORDER_NOT_FOUND': 'Order not found',
+    'PAYMENT_NOT_FOUND': 'Payment not found',
+    'INVALID_AMOUNT': 'Invalid amount',
+    'INTERNAL_ERROR': 'Internal server error',
+    'RATE_LIMIT': 'Too many requests',
+    'MAINTENANCE': 'Service under maintenance',
 }
 
-# Add OrderStatus and ServiceType aliases for nakrutochka_api.py
-OrderStatus = ORDER_STATUS
-ServiceType = SERVICE_TYPE
+# === Telegram Constants ===
 
+TELEGRAM_COMMANDS = [
+    ('start', '🚀 Почати'),
+    ('help', '❓ Допомога'),
+    ('balance', '💰 Баланс'),
+    ('services', '📋 Сервіси'),
+    ('orders', '📦 Замовлення'),
+    ('referral', '👥 Реферальна програма'),
+    ('support', '💬 Підтримка'),
+    ('settings', '⚙️ Налаштування'),
+]
 
-# Payment providers
-class PAYMENT_PROVIDERS:
-    """Доступні платіжні провайдери"""
-    CRYPTOBOT = 'cryptobot'
-    NOWPAYMENTS = 'nowpayments'
-    MONOBANK = 'monobank'
+# === Social Platforms ===
 
-    @classmethod
-    def all(cls) -> list:
-        return [cls.CRYPTOBOT, cls.NOWPAYMENTS, cls.MONOBANK]
-
-    @classmethod
-    def crypto(cls) -> list:
-        return [cls.CRYPTOBOT, cls.NOWPAYMENTS]
-
-    @classmethod
-    def fiat(cls) -> list:
-        return [cls.MONOBANK]
-
-
-# Supported cryptocurrencies
-CRYPTO_CURRENCIES = {
-    'BTC': {'name': 'Bitcoin', 'decimals': 8},
-    'ETH': {'name': 'Ethereum', 'decimals': 18},
-    'USDT': {'name': 'Tether', 'decimals': 6},
-    'TON': {'name': 'Toncoin', 'decimals': 9},
-    'BNB': {'name': 'Binance Coin', 'decimals': 18},
-    'TRX': {'name': 'TRON', 'decimals': 6},
-}
-
-# Регулярні вирази
-REGEX_PATTERNS = {
-    'TELEGRAM_USERNAME': r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$',
-    'URL': r'^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$',
-    'INSTAGRAM_URL': r'^https?:\/\/(www\.)?instagram\.com\/.*$',
-    'TELEGRAM_URL': r'^https?:\/\/(www\.)?(t\.me|telegram\.me)\/.*$',
-    'YOUTUBE_URL': r'^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/.*$',
-    'TIKTOK_URL': r'^https?:\/\/(www\.)?tiktok\.com\/.*$',
-    'TWITTER_URL': r'^https?:\/\/(www\.)?(twitter\.com|x\.com)\/.*$',
-    'FACEBOOK_URL': r'^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.*$',
-    'EMAIL': r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    'PHONE_UA': r'^(\+?38)?(0\d{9})$',
-    'UUID': r'^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
-}
-
-# Social media categories
-SOCIAL_MEDIA_CATEGORIES = {
+SOCIAL_PLATFORMS = {
     'instagram': {
         'name': 'Instagram',
         'icon': '📷',
-        'color': '#E4405F',
-        'services': ['followers', 'likes', 'views', 'comments', 'reels', 'story', 'live'],
-    },
-    'telegram': {
-        'name': 'Telegram',
-        'icon': '✈️',
-        'color': '#0088CC',
-        'services': ['members', 'views', 'reactions', 'comments', 'votes'],
-    },
-    'youtube': {
-        'name': 'YouTube',
-        'icon': '📺',
-        'color': '#FF0000',
-        'services': ['subscribers', 'views', 'likes', 'comments', 'shorts'],
+        'color': '#E4405F'
     },
     'tiktok': {
         'name': 'TikTok',
         'icon': '🎵',
-        'color': '#000000',
-        'services': ['followers', 'likes', 'views', 'comments', 'shares'],
+        'color': '#000000'
     },
-    'twitter': {
-        'name': 'Twitter / X',
-        'icon': '🐦',
-        'color': '#1DA1F2',
-        'services': ['followers', 'likes', 'retweets', 'comments', 'views'],
+    'youtube': {
+        'name': 'YouTube',
+        'icon': '📺',
+        'color': '#FF0000'
+    },
+    'telegram': {
+        'name': 'Telegram',
+        'icon': '✈️',
+        'color': '#0088cc'
     },
     'facebook': {
         'name': 'Facebook',
         'icon': '👤',
-        'color': '#1877F2',
-        'services': ['likes', 'followers', 'views', 'comments', 'shares'],
+        'color': '#1877F2'
     },
+    'twitter': {
+        'name': 'Twitter',
+        'icon': '🐦',
+        'color': '#1DA1F2'
+    },
+    'twitch': {
+        'name': 'Twitch',
+        'icon': '🎮',
+        'color': '#9146FF'
+    },
+    'spotify': {
+        'name': 'Spotify',
+        'icon': '🎧',
+        'color': '#1DB954'
+    },
+    'discord': {
+        'name': 'Discord',
+        'icon': '💬',
+        'color': '#5865F2'
+    },
+    'vk': {
+        'name': 'VKontakte',
+        'icon': '📱',
+        'color': '#0077FF'
+    },
+    'threads': {
+        'name': 'Threads',
+        'icon': '🧵',
+        'color': '#000000'
+    }
 }
 
-# Bot commands
-BOT_COMMANDS = {
-    'start': 'Почати роботу з ботом',
-    'help': 'Допомога',
-    'balance': 'Баланс',
-    'orders': 'Мої замовлення',
-    'referral': 'Реферальна програма',
-    'support': 'Підтримка',
-    'settings': 'Налаштування',
-    'language': 'Змінити мову',
+# === API Response Codes ===
+
+API_CODES = {
+    'SUCCESS': 'SUCCESS',
+    'ERROR': 'ERROR',
+    'VALIDATION_ERROR': 'VALIDATION_ERROR',
+    'NOT_FOUND': 'NOT_FOUND',
+    'UNAUTHORIZED': 'UNAUTHORIZED',
+    'FORBIDDEN': 'FORBIDDEN',
+    'RATE_LIMIT': 'RATE_LIMIT',
+    'MAINTENANCE': 'MAINTENANCE',
+    'PAYMENT_REQUIRED': 'PAYMENT_REQUIRED',
+    'INSUFFICIENT_BALANCE': 'INSUFFICIENT_BALANCE',
 }
 
-# Supported languages
-LANGUAGES = {
-    'uk': {'name': 'Українська', 'flag': '🇺🇦'},
-    'en': {'name': 'English', 'flag': '🇬🇧'},
-    'ru': {'name': 'Русский', 'flag': '🇷🇺'},
+# === Permissions ===
+
+PERMISSIONS = {
+    'USER': 'user',
+    'MODERATOR': 'moderator',
+    'ADMIN': 'admin',
+    'SUPER_ADMIN': 'super_admin',
 }
 
-# Order priorities
-ORDER_PRIORITIES = {
-    'low': {'name': 'Низький', 'multiplier': 1.0},
-    'normal': {'name': 'Звичайний', 'multiplier': 1.0},
-    'high': {'name': 'Високий', 'multiplier': 1.2},
-    'urgent': {'name': 'Терміновий', 'multiplier': 1.5},
-}
+# === Time Zones ===
 
-# Time intervals for drip-feed
-DRIP_FEED_INTERVALS = {
-    '1m': 1,  # 1 хвилина
-    '5m': 5,  # 5 хвилин
-    '10m': 10,  # 10 хвилин
-    '30m': 30,  # 30 хвилин
-    '1h': 60,  # 1 година
-    '2h': 120,  # 2 години
-    '6h': 360,  # 6 годин
-    '12h': 720,  # 12 годин
-    '24h': 1440,  # 24 години
-}
-
-# Default values - ОНОВЛЕНО
-DEFAULTS = {
-    'LANGUAGE': 'uk',
-    'CURRENCY': 'USD',
-    'PAGE_SIZE': 20,
-    'ORDER_PRIORITY': 'normal',
-    'DRIP_FEED_INTERVAL': '1h',
-    'REFERRAL_BONUS': 7.0,  # 7% для першого рівня
-    'REFERRAL_BONUS_LEVEL2': 2.5,  # 2.5% для другого рівня
-}
+DEFAULT_TIMEZONE = 'Europe/Kyiv'  # Ukrainian timezone
+SUPPORTED_TIMEZONES = [
+    'Europe/Kyiv',
+    'Europe/London',
+    'Europe/Paris',
+    'America/New_York',
+    'America/Los_Angeles',
+    'Asia/Tokyo',
+    'Asia/Shanghai',
+    'Australia/Sydney',
+]

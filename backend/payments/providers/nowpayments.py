@@ -9,7 +9,7 @@ import hashlib
 from typing import Dict, List, Optional, Any
 from decimal import Decimal
 from datetime import datetime, timedelta
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlencode
 
 from backend.payments.providers.base import BasePaymentProvider
 from backend.config import config
@@ -66,6 +66,19 @@ class NOWPaymentsProvider(BasePaymentProvider):
         }
 
         logger.info(f"NOWPayments provider initialized (sandbox: {config.NOWPAYMENTS_SANDBOX})")
+
+    def get_supported_currencies(self) -> List[str]:
+        """Отримати підтримувані валюти"""
+        return list(self.supported_currencies.keys())
+
+    def get_payment_limits(self, currency: str) -> Dict[str, Decimal]:
+        """Отримати ліміти для валюти"""
+        min_amount = self.min_amounts.get(currency, 10)
+
+        return {
+            'min': Decimal(str(min_amount)),
+            'max': Decimal('100000')
+        }
 
     def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Optional[Dict]:
         """
@@ -470,4 +483,5 @@ class NOWPaymentsProvider(BasePaymentProvider):
         Returns:
             Список мереж
         """
-        return self.supported_currencies.get(currency.upper(), [])
+        networks = self.supported_currencies.get(currency.upper(), [])
+        return [n for n in networks if n is not None]

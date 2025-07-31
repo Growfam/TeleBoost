@@ -46,6 +46,26 @@ class CryptoBotProvider(BasePaymentProvider):
             'Content-Type': 'application/json'
         })
 
+    def get_supported_currencies(self) -> List[str]:
+        """Отримати підтримувані валюти"""
+        return self.supported_currencies
+
+    def get_payment_limits(self, currency: str) -> Dict[str, Decimal]:
+        """Отримати ліміти для валюти"""
+        limits = {
+            'USDT': {'min': Decimal('1'), 'max': Decimal('100000')},
+            'BTC': {'min': Decimal('0.0001'), 'max': Decimal('10')},
+            'TON': {'min': Decimal('5'), 'max': Decimal('100000')},
+            'ETH': {'min': Decimal('0.001'), 'max': Decimal('100')},
+            'BUSD': {'min': Decimal('1'), 'max': Decimal('100000')},
+            'BNB': {'min': Decimal('0.01'), 'max': Decimal('1000')},
+        }
+
+        return limits.get(currency, {
+            'min': Decimal('0.01'),
+            'max': Decimal('999999.99')
+        })
+
     def _make_request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Виконати запит до CryptoBot API

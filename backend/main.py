@@ -80,178 +80,150 @@ def create_app():
 def register_blueprints(app):
     """Реєстрація всіх blueprints"""
 
-    # Auth routes - готові
+    # Auth routes
     from backend.auth.routes import auth_bp
     app.register_blueprint(auth_bp)
     logger.info("✅ Auth blueprint registered")
 
-    # Services routes - готові
+    # Services routes
     from backend.services.routes import services_bp
     app.register_blueprint(services_bp)
     logger.info("✅ Services blueprint registered")
 
-    # API routes - готові
+    # API routes
     from backend.api.routes import api_bp
     app.register_blueprint(api_bp)
     logger.info("✅ API blueprint registered")
 
-    # Referrals routes - НОВІ
+    # Payments routes
+    from backend.payments.routes import payments_bp
+    app.register_blueprint(payments_bp)
+    logger.info("✅ Payments blueprint registered")
+
+    # Payment webhooks
+    from backend.payments.webhooks import webhooks_bp
+    app.register_blueprint(webhooks_bp)
+    logger.info("✅ Payment webhooks blueprint registered")
+
+    # Referrals routes
+    from backend.referrals.routes import referrals_bp
+    app.register_blueprint(referrals_bp)
+    logger.info("✅ Referrals blueprint registered")
+
+    # Users routes
     try:
-        from backend.referrals.routes import referrals_bp
-        app.register_blueprint(referrals_bp)
-        logger.info("✅ Referrals blueprint registered")
+        from backend.users.routes import users_bp
+        app.register_blueprint(users_bp)
+        logger.info("✅ Users blueprint registered")
     except ImportError:
-        logger.warning("⚠️ Referrals module not found, using stub endpoints")
-        # Створюємо заглушки якщо модуль ще не створено
+        logger.warning("⚠️ Users module not found, using stub endpoints")
+        # Створюємо заглушку
         from flask import Blueprint
         from backend.middleware.auth_middleware import AuthMiddleware
 
-        referrals_bp = Blueprint('referrals', __name__, url_prefix='/api/referrals')
+        users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 
-        @referrals_bp.route('/stats')
+        @users_bp.route('/balance')
         @AuthMiddleware.require_auth
-        def referral_stats():
-            stats = supabase.get_referral_stats(g.current_user.id)
+        def get_balance():
             return jsonify({
                 'success': True,
-                'data': stats
+                'data': {
+                    'balance': g.current_user.balance,
+                    'currency': 'USD',
+                    'total_deposited': g.current_user.total_deposited,
+                    'total_withdrawn': g.current_user.total_withdrawn,
+                    'total_spent': g.current_user.total_spent
+                }
             })
 
-        @referrals_bp.route('/link')
+        @users_bp.route('/transactions')
         @AuthMiddleware.require_auth
-        def referral_link():
-            bot_url = f"https://t.me/{config.BOT_USERNAME.replace('@', '')}"
-            ref_link = f"{bot_url}?start=ref_{g.current_user.referral_code}"
+        def get_transactions():
+            page = int(request.args.get('page', 1))
+            limit = int(request.args.get('limit', 20))
+
+            transactions = supabase.get_user_transactions(
+                g.current_user.id,
+                limit=limit,
+                offset=(page - 1) * limit
+            )
 
             return jsonify({
                 'success': True,
                 'data': {
-                    'link': ref_link,
-                    'code': g.current_user.referral_code,
-                    'earnings': g.current_user.referral_earnings,
-                    'rates': {
-                        'level1': config.REFERRAL_BONUS_PERCENT,
-                        'level2': config.REFERRAL_BONUS_LEVEL2_PERCENT
-                    }
+                    'transactions': transactions,
+                    'page': page,
+                    'limit': limit
                 }
             })
 
-        app.register_blueprint(referrals_bp)
-        logger.info("✅ Referrals blueprint registered (stub)")
+        app.register_blueprint(users_bp)
+        logger.info("✅ Users blueprint registered (stub)")
 
-    # Створюємо тимчасові заглушки для інших blueprints
-    from flask import Blueprint
-    from backend.middleware.auth_middleware import AuthMiddleware
+    # Orders routes
+    try:
+        from backend.orders.routes import orders_bp
+        app.register_blueprint(orders_bp)
+        logger.info("✅ Orders blueprint registered")
+    except ImportError:
+        logger.warning("⚠️ Orders module not found, using stub endpoints")
+        # Створюємо заглушку
+        from flask import Blueprint
+        from backend.middleware.auth_middleware import AuthMiddleware
 
-    # === Users Blueprint ===
-    users_bp = Blueprint('users', __name__, url_prefix='/api/users')
+        orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
-    @users_bp.route('/balance')
-    @AuthMiddleware.require_auth
-    def get_balance():
-        return jsonify({
-            'success': True,
-            'data': {
-                'balance': g.current_user.balance,
-                'currency': 'USD',
-                'total_deposited': g.current_user.total_deposited,
-                'total_withdrawn': g.current_user.total_withdrawn,
-                'total_spent': g.current_user.total_spent
-            }
-        })
+        @orders_bp.route('/', methods=['GET'])
+        @AuthMiddleware.require_auth
+        def get_orders():
+            return jsonify({
+                'success': True,
+                'data': {
+                    'orders': [],
+                    'total': 0
+                }
+            })
 
-    @users_bp.route('/transactions')
-    @AuthMiddleware.require_auth
-    def get_transactions():
-        page = int(request.args.get('page', 1))
-        limit = int(request.args.get('limit', 20))
+        @orders_bp.route('/', methods=['POST'])
+        @AuthMiddleware.require_auth
+        def create_order():
+            return jsonify({
+                'success': False,
+                'error': 'Orders not implemented yet',
+                'code': 'NOT_IMPLEMENTED'
+            }), 501
 
-        transactions = supabase.get_user_transactions(
-            g.current_user.id,
-            limit=limit,
-            offset=(page - 1) * limit
-        )
+        app.register_blueprint(orders_bp)
+        logger.info("✅ Orders blueprint registered (stub)")
 
-        return jsonify({
-            'success': True,
-            'data': {
-                'transactions': transactions,
-                'page': page,
-                'limit': limit
-            }
-        })
+    # Statistics routes
+    try:
+        from backend.statistics.routes import statistics_bp
+        app.register_blueprint(statistics_bp)
+        logger.info("✅ Statistics blueprint registered")
+    except ImportError:
+        logger.warning("⚠️ Statistics module not found, using stub endpoints")
+        # Створюємо заглушку
+        from flask import Blueprint
+        from backend.middleware.auth_middleware import AuthMiddleware
 
-    app.register_blueprint(users_bp)
-    logger.info("✅ Users blueprint registered")
+        statistics_bp = Blueprint('statistics', __name__, url_prefix='/api/statistics')
 
-    # === Orders Blueprint ===
-    orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
+        @statistics_bp.route('/overview')
+        @AuthMiddleware.require_admin
+        def statistics_overview():
+            return jsonify({
+                'success': True,
+                'data': {
+                    'users': {'total': 0, 'active': 0},
+                    'orders': {'total': 0, 'today': 0},
+                    'revenue': {'total': 0, 'today': 0}
+                }
+            })
 
-    @orders_bp.route('/', methods=['GET'])
-    @AuthMiddleware.require_auth
-    def get_orders():
-        return jsonify({
-            'success': True,
-            'data': {
-                'orders': [],
-                'total': 0
-            }
-        })
-
-    @orders_bp.route('/', methods=['POST'])
-    @AuthMiddleware.require_auth
-    def create_order():
-        return jsonify({
-            'success': False,
-            'error': 'Orders not implemented yet',
-            'code': 'NOT_IMPLEMENTED'
-        }), 501
-
-    app.register_blueprint(orders_bp)
-    logger.info("✅ Orders blueprint registered")
-
-    # === Payments Blueprint ===
-    payments_bp = Blueprint('payments', __name__, url_prefix='/api/payments')
-
-    @payments_bp.route('/create', methods=['POST'])
-    @AuthMiddleware.require_auth
-    def create_payment():
-        return jsonify({
-            'success': False,
-            'error': 'Payments not implemented yet',
-            'code': 'NOT_IMPLEMENTED'
-        }), 501
-
-    @payments_bp.route('/webhooks/cryptobot', methods=['POST'])
-    def cryptobot_webhook():
-        logger.info("CryptoBot webhook received")
-        return jsonify({'status': 'ok'})
-
-    @payments_bp.route('/webhooks/nowpayments', methods=['POST'])
-    def nowpayments_webhook():
-        logger.info("NOWPayments webhook received")
-        return jsonify({'status': 'ok'})
-
-    app.register_blueprint(payments_bp)
-    logger.info("✅ Payments blueprint registered")
-
-    # === Statistics Blueprint ===
-    statistics_bp = Blueprint('statistics', __name__, url_prefix='/api/statistics')
-
-    @statistics_bp.route('/overview')
-    @AuthMiddleware.require_admin
-    def statistics_overview():
-        return jsonify({
-            'success': True,
-            'data': {
-                'users': {'total': 0, 'active': 0},
-                'orders': {'total': 0, 'today': 0},
-                'revenue': {'total': 0, 'today': 0}
-            }
-        })
-
-    app.register_blueprint(statistics_bp)
-    logger.info("✅ Statistics blueprint registered")
+        app.register_blueprint(statistics_bp)
+        logger.info("✅ Statistics blueprint registered (stub)")
 
     logger.info("✅ All blueprints registered successfully")
 
@@ -299,7 +271,15 @@ def register_base_routes(app):
                 'payments': {
                     'create': 'POST /api/payments/create',
                     'status': 'GET /api/payments/{id}',
-                    'methods': 'GET /api/payments/methods'
+                    'check': 'POST /api/payments/{id}/check',
+                    'list': 'GET /api/payments',
+                    'methods': 'GET /api/payments/methods',
+                    'limits': 'GET /api/payments/limits',
+                    'calculate': 'POST /api/payments/calculate',
+                    'webhooks': {
+                        'cryptobot': 'POST /api/webhooks/cryptobot',
+                        'nowpayments': 'POST /api/webhooks/nowpayments'
+                    }
                 },
                 'referrals': {
                     'stats': 'GET /api/referrals/stats',
@@ -330,6 +310,7 @@ def register_base_routes(app):
             'database': False,
             'redis': False,
             'middleware': {},
+            'payments': {},
             'timestamp': start.isoformat()
         }
 
@@ -352,6 +333,15 @@ def register_base_routes(app):
         if hasattr(app, 'middleware'):
             for name, middleware in app.middleware.items():
                 checks['middleware'][name] = True
+
+        # Перевірка платіжних провайдерів
+        try:
+            from backend.payments.providers import get_available_providers
+            available_providers = get_available_providers()
+            for provider in available_providers:
+                checks['payments'][provider] = True
+        except Exception as e:
+            logger.error(f"Payment providers check failed: {e}")
 
         # Визначаємо загальний статус
         is_healthy = checks['database']  # Redis опціональний
@@ -400,6 +390,14 @@ def register_base_routes(app):
             if 'error' in app.middleware:
                 middleware_stats['errors'] = app.middleware['error'].get_error_stats()
 
+        # Перевірка платіжних провайдерів
+        payment_providers = []
+        try:
+            from backend.payments.providers import get_available_providers
+            payment_providers = get_available_providers()
+        except:
+            pass
+
         return jsonify({
             'success': True,
             'data': {
@@ -410,8 +408,8 @@ def register_base_routes(app):
                 'features': {
                     'auth': True,
                     'services': True,
-                    'orders': False,  # Поки не реалізовано
-                    'payments': False,  # Поки не реалізовано
+                    'orders': True,
+                    'payments': True,
                     'referrals': True,
                     'middleware': {
                         'auth': True,
@@ -422,6 +420,7 @@ def register_base_routes(app):
                         'rate_limiting': True
                     }
                 },
+                'payment_providers': payment_providers,
                 'referral_system': {
                     'enabled': True,
                     'levels': 2,
@@ -489,6 +488,17 @@ def init_services():
         except Exception as e:
             logger.warning(f"⚠️ Nakrutochka API check failed: {e}")
 
+        # Перевірка платіжних провайдерів
+        try:
+            from backend.payments.providers import get_available_providers
+            providers = get_available_providers()
+            if providers:
+                logger.info(f"✅ Payment providers available: {', '.join(providers)}")
+            else:
+                logger.warning("⚠️ No payment providers configured")
+        except Exception as e:
+            logger.warning(f"⚠️ Payment providers check failed: {e}")
+
         logger.info("✅ All services initialized successfully")
 
         # Виводимо інформацію про конфігурацію
@@ -542,6 +552,7 @@ if __name__ == '__main__':
         logger.info(f"   - Cache: ✅ Redis caching enabled")
         logger.info(f"   - Performance: ✅ Monitoring active")
         logger.info(f"   - Referrals: ✅ Two-level system (7% + 2.5%)")
+        logger.info(f"   - Payments: ✅ CryptoBot + NOWPayments")
         logger.info("=" * 50)
 
         # Запуск Flask сервера
