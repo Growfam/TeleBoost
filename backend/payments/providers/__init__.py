@@ -18,8 +18,6 @@ class PAYMENT_PROVIDERS:
     """Константи платіжних провайдерів"""
     CRYPTOBOT = 'cryptobot'
     NOWPAYMENTS = 'nowpayments'
-    MONOBANK = 'monobank'
-
 
 def get_payment_provider(provider_name: str) -> Optional[BasePaymentProvider]:
     """
@@ -67,9 +65,6 @@ def get_available_providers() -> list:
 
     if config.NOWPAYMENTS_API_KEY:
         available.append(PAYMENT_PROVIDERS.NOWPAYMENTS)
-
-    if config.MONOBANK_TOKEN:
-        available.append(PAYMENT_PROVIDERS.MONOBANK)
 
     return available
 

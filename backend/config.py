@@ -76,10 +76,6 @@ class Config:
     NOWPAYMENTS_WEBHOOK_PATH = '/api/webhooks/nowpayments'
     NOWPAYMENTS_SANDBOX = os.getenv('NOWPAYMENTS_SANDBOX', 'false').lower() == 'true'
 
-    # Monobank
-    MONOBANK_TOKEN = os.getenv('MONOBANK_TOKEN', '')
-    MONOBANK_WEBHOOK_PATH = '/api/webhooks/monobank'
-
     # Rate Limiting
     RATELIMIT_ENABLED = True
     RATELIMIT_STORAGE_URL = REDIS_URL
@@ -216,7 +212,6 @@ class Config:
         payment_providers = [
             ('CRYPTOBOT_TOKEN', cls.CRYPTOBOT_TOKEN),
             ('NOWPAYMENTS_API_KEY', cls.NOWPAYMENTS_API_KEY),
-            ('MONOBANK_TOKEN', cls.MONOBANK_TOKEN),
         ]
 
         missing = []

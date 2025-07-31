@@ -35,8 +35,6 @@ class PAYMENT_PROVIDERS:
     """Платіжні провайдери"""
     CRYPTOBOT = 'cryptobot'
     NOWPAYMENTS = 'nowpayments'
-    MONOBANK = 'monobank'
-
 
 # === Transaction Types ===
 
