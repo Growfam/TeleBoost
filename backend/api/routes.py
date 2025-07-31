@@ -7,7 +7,7 @@ import logging
 from flask import Blueprint, request, jsonify, g
 from datetime import datetime
 
-from backend.auth.decorators import jwt_required, optional_jwt
+from backend.auth.decorators import jwt_required, optional_jwt, rate_limit, admin_required
 from backend.api.nakrutochka_api import nakrutochka
 from backend.config import config
 from backend.utils.constants import SUCCESS_MESSAGES, ERROR_MESSAGES
@@ -84,6 +84,7 @@ def health_check():
 
 @api_bp.route('/external-balance', methods=['GET'])
 @jwt_required
+@admin_required
 def get_external_balance():
     """
     Get Nakrutochka account balance (Admin only)
@@ -98,14 +99,6 @@ def get_external_balance():
     }
     """
     try:
-        # Check admin permission
-        if not g.current_user.is_admin:
-            return jsonify({
-                'success': False,
-                'error': 'Admin access required',
-                'code': 'ADMIN_REQUIRED'
-            }), 403
-
         # Get balance from Nakrutochka
         result = nakrutochka.get_balance()
 
@@ -135,6 +128,7 @@ def get_external_balance():
 
 @api_bp.route('/test-connection', methods=['POST'])
 @jwt_required
+@admin_required
 def test_api_connection():
     """
     Test connection to external API (Admin only)
@@ -156,14 +150,6 @@ def test_api_connection():
     }
     """
     try:
-        # Check admin permission
-        if not g.current_user.is_admin:
-            return jsonify({
-                'success': False,
-                'error': 'Admin access required',
-                'code': 'ADMIN_REQUIRED'
-            }), 403
-
         data = request.get_json() or {}
         api_name = data.get('api', 'nakrutochka')
 
@@ -304,6 +290,7 @@ def get_supported_services():
 
 @api_bp.route('/system-info', methods=['GET'])
 @jwt_required
+@admin_required
 def get_system_info():
     """
     Get system information (Admin only)
@@ -321,14 +308,6 @@ def get_system_info():
     }
     """
     try:
-        # Check admin permission
-        if not g.current_user.is_admin:
-            return jsonify({
-                'success': False,
-                'error': 'Admin access required',
-                'code': 'ADMIN_REQUIRED'
-            }), 403
-
         from backend.utils.constants import LIMITS, FEES
 
         system_info = {

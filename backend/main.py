@@ -104,10 +104,12 @@ def register_blueprints(app):
         logger.warning("⚠️ Referrals module not found, using stub endpoints")
         # Створюємо заглушки якщо модуль ще не створено
         from flask import Blueprint
+        from backend.middleware.auth_middleware import AuthMiddleware
+
         referrals_bp = Blueprint('referrals', __name__, url_prefix='/api/referrals')
 
         @referrals_bp.route('/stats')
-        @app.middleware['auth'].require_auth
+        @AuthMiddleware.require_auth
         def referral_stats():
             stats = supabase.get_referral_stats(g.current_user.id)
             return jsonify({
@@ -116,7 +118,7 @@ def register_blueprints(app):
             })
 
         @referrals_bp.route('/link')
-        @app.middleware['auth'].require_auth
+        @AuthMiddleware.require_auth
         def referral_link():
             bot_url = f"https://t.me/{config.BOT_USERNAME.replace('@', '')}"
             ref_link = f"{bot_url}?start=ref_{g.current_user.referral_code}"
@@ -139,12 +141,13 @@ def register_blueprints(app):
 
     # Створюємо тимчасові заглушки для інших blueprints
     from flask import Blueprint
+    from backend.middleware.auth_middleware import AuthMiddleware
 
     # === Users Blueprint ===
     users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 
     @users_bp.route('/balance')
-    @app.middleware['auth'].require_auth
+    @AuthMiddleware.require_auth
     def get_balance():
         return jsonify({
             'success': True,
@@ -158,7 +161,7 @@ def register_blueprints(app):
         })
 
     @users_bp.route('/transactions')
-    @app.middleware['auth'].require_auth
+    @AuthMiddleware.require_auth
     def get_transactions():
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 20))
@@ -185,7 +188,7 @@ def register_blueprints(app):
     orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
     @orders_bp.route('/', methods=['GET'])
-    @app.middleware['auth'].require_auth
+    @AuthMiddleware.require_auth
     def get_orders():
         return jsonify({
             'success': True,
@@ -196,7 +199,7 @@ def register_blueprints(app):
         })
 
     @orders_bp.route('/', methods=['POST'])
-    @app.middleware['auth'].require_auth
+    @AuthMiddleware.require_auth
     def create_order():
         return jsonify({
             'success': False,
@@ -211,7 +214,7 @@ def register_blueprints(app):
     payments_bp = Blueprint('payments', __name__, url_prefix='/api/payments')
 
     @payments_bp.route('/create', methods=['POST'])
-    @app.middleware['auth'].require_auth
+    @AuthMiddleware.require_auth
     def create_payment():
         return jsonify({
             'success': False,
@@ -236,7 +239,7 @@ def register_blueprints(app):
     statistics_bp = Blueprint('statistics', __name__, url_prefix='/api/statistics')
 
     @statistics_bp.route('/overview')
-    @app.middleware['auth'].require_admin
+    @AuthMiddleware.require_admin
     def statistics_overview():
         return jsonify({
             'success': True,
@@ -498,7 +501,8 @@ def init_services():
         logger.info(f"Database: {'✅ Connected' if supabase.test_connection() else '❌ Not connected'}")
         logger.info(f"Redis: {'✅ Connected' if redis_client and redis_client.ping() else '⚠️ Not available'}")
         logger.info(f"Middleware: ✅ All systems initialized")
-        logger.info(f"Referral System: ✅ Two-level (L1: {config.REFERRAL_BONUS_PERCENT}%, L2: {config.REFERRAL_BONUS_LEVEL2_PERCENT}%)")
+        logger.info(
+            f"Referral System: ✅ Two-level (L1: {config.REFERRAL_BONUS_PERCENT}%, L2: {config.REFERRAL_BONUS_LEVEL2_PERCENT}%)")
         logger.info("=" * 50)
 
     except Exception as e:

@@ -274,7 +274,7 @@ class Referral:
         Оновити статистику депозитів реферала
 
         Args:
-            referral_id: ID зв'язку
+            referral_id: ID зв'язку (UUID)
             deposit_amount: Сума депозиту
             bonus_amount: Сума бонусу
 
@@ -282,28 +282,36 @@ class Referral:
             True якщо успішно
         """
         try:
-            # Оновлюємо статистику
-            result = supabase.table('referrals') \
+            # ВИПРАВЛЕНО: Використовуємо RPC функцію increment_value правильно
+            # Оновлюємо total_deposits
+            deposits_updated = supabase.client.rpc('increment_value', {
+                'table_name': 'referrals',
+                'column_name': 'total_deposits',
+                'row_id': referral_id,
+                'increment_by': deposit_amount
+            }).execute()
+
+            # Оновлюємо total_bonuses_generated
+            bonuses_updated = supabase.client.rpc('increment_value', {
+                'table_name': 'referrals',
+                'column_name': 'total_bonuses_generated',
+                'row_id': referral_id,
+                'increment_by': bonus_amount
+            }).execute()
+
+            # Оновлюємо інші поля через звичайний UPDATE
+            update_result = supabase.table('referrals') \
                 .update({
-                'total_deposits': supabase.client.rpc('increment_value', {
-                    'table_name': 'referrals',
-                    'column_name': 'total_deposits',
-                    'row_id': referral_id,
-                    'increment_by': deposit_amount
-                }),
-                'total_bonuses_generated': supabase.client.rpc('increment_value', {
-                    'table_name': 'referrals',
-                    'column_name': 'total_bonuses_generated',
-                    'row_id': referral_id,
-                    'increment_by': bonus_amount
-                }),
                 'last_deposit_at': datetime.utcnow().isoformat(),
                 'bonus_paid': True
             }) \
                 .eq('id', referral_id) \
                 .execute()
 
-            return bool(result.data)
+            # Перевіряємо що всі операції пройшли успішно
+            return bool(deposits_updated.data is not None and
+                        bonuses_updated.data is not None and
+                        update_result.data)
 
         except Exception as e:
             logger.error(f"Error updating deposit stats: {e}")

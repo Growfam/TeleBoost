@@ -93,19 +93,21 @@ class SupabaseClient:
     def update_user_balance(self, user_id: str, amount: float, operation: str = 'add') -> bool:
         """Оновити баланс користувача"""
         try:
-            # Використовуємо RPC для атомарного оновлення
+            # ВИПРАВЛЕНО: Правильний формат виклику RPC функцій Supabase
             if operation == 'add':
-                result = self.rpc('increment_balance', {
+                result = self.client.rpc('increment_balance', {
                     'user_id': user_id,
                     'amount': amount
                 }).execute()
             else:  # subtract
-                result = self.rpc('decrement_balance', {
+                result = self.client.rpc('decrement_balance', {
                     'user_id': user_id,
                     'amount': amount
                 }).execute()
 
-            return bool(result.data)
+            # Перевіряємо результат - функція повертає boolean
+            return result.data is True if result.data is not None else False
+
         except Exception as e:
             logger.error(f"Error updating balance for user {user_id}: {e}")
             return False
@@ -316,26 +318,30 @@ class SupabaseClient:
             bonus_amount: Сума нарахованого бонусу
         """
         try:
-            # Оновлюємо статистику
-            update_data = {
-                'total_deposits': self.client.rpc('increment_value', {
-                    'table_name': 'referrals',
-                    'column_name': 'total_deposits',
-                    'row_id': referral_id,
-                    'increment_by': deposit_amount
-                }),
-                'total_bonuses_generated': self.client.rpc('increment_value', {
-                    'table_name': 'referrals',
-                    'column_name': 'total_bonuses_generated',
-                    'row_id': referral_id,
-                    'increment_by': bonus_amount
-                }),
+            # ВИПРАВЛЕНО: Використовуємо правильний формат для increment_value
+            # Оновлюємо total_deposits
+            deposits_result = self.client.rpc('increment_value', {
+                'table_name': 'referrals',
+                'column_name': 'total_deposits',
+                'row_id': referral_id,
+                'increment_by': deposit_amount
+            }).execute()
+
+            # Оновлюємо total_bonuses_generated
+            bonuses_result = self.client.rpc('increment_value', {
+                'table_name': 'referrals',
+                'column_name': 'total_bonuses_generated',
+                'row_id': referral_id,
+                'increment_by': bonus_amount
+            }).execute()
+
+            # Оновлюємо інші поля
+            update_result = self.table('referrals').update({
                 'last_deposit_at': datetime.utcnow().isoformat(),
                 'bonus_paid': True
-            }
+            }).eq('id', referral_id).execute()
 
-            result = self.table('referrals').update(update_data).eq('id', referral_id).execute()
-            return bool(result.data)
+            return bool(deposits_result.data and bonuses_result.data and update_result.data)
         except Exception as e:
             logger.error(f"Error updating referral stats: {e}")
             return False

@@ -239,18 +239,17 @@ def _create_referral_transaction(referrer_id: str, amount: float, level: int,
         transaction = supabase.create_transaction(transaction_data)
 
         if transaction:
-            # Оновлюємо referral_earnings користувача
-            supabase.table('users') \
-                .update({
-                'referral_earnings': supabase.client.rpc('increment_value', {
-                    'table_name': 'users',
-                    'column_name': 'referral_earnings',
-                    'row_id': referrer_id,
-                    'increment_by': amount
-                })
-            }) \
-                .eq('id', referrer_id) \
-                .execute()
+            # ВИПРАВЛЕНО: Оновлюємо referral_earnings користувача
+            # Використовуємо RPC функцію increment_value правильно
+            earnings_updated = supabase.client.rpc('increment_value', {
+                'table_name': 'users',
+                'column_name': 'referral_earnings',
+                'row_id': referrer_id,
+                'increment_by': amount
+            }).execute()
+
+            if not earnings_updated.data:
+                logger.warning(f"Failed to update referral_earnings for user {referrer_id}")
 
             # Інвалідуємо кеш
             invalidate_user_cache(referrer_id)
