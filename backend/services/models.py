@@ -128,9 +128,9 @@ class Service:
 
     def __init__(self, data: Dict[str, Any]):
         """Initialize from database data"""
-        # IDs
-        self.id = data.get('id')  # Internal UUID
-        self.service_id = data.get('service_id')  # Nakrutochka ID
+        # ID - тепер використовуємо INTEGER id з БД
+        self.id = data.get('id')  # Nakrutochka ID (INTEGER)
+        self.service_id = self.id  # Для сумісності з старим кодом
 
         # Basic info
         self.name = data.get('name', '')
@@ -182,10 +182,10 @@ class Service:
                 if cached:
                     return cls(cached)
 
-            # Get from database
+            # Get from database - тепер використовуємо id напряму
             result = supabase.table('services') \
                 .select('*') \
-                .eq('service_id', service_id) \
+                .eq('id', service_id) \
                 .single() \
                 .execute()
 
@@ -315,16 +315,16 @@ class Service:
             # Add timestamps
             service_data['updated_at'] = datetime.utcnow().isoformat()
 
-            # Upsert (insert or update)
+            # Upsert (insert or update) - використовуємо id як primary key
             result = supabase.table('services') \
-                .upsert(service_data, on_conflict='service_id') \
+                .upsert(service_data, on_conflict='id') \
                 .execute()
 
             if result.data:
                 # Clear cache
                 cache_patterns = [
                     "services:list*",
-                    f"service:{service_data.get('service_id')}*"
+                    f"service:{service_data.get('id')}*"
                 ]
                 for pattern in cache_patterns:
                     keys = redis_client.keys(pattern)

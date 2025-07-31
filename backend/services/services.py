@@ -31,7 +31,7 @@ class ServiceManager:
 
         return datetime.utcnow() - self.last_update > self.update_interval
 
-    async def sync_services(self, force: bool = False) -> Tuple[bool, str]:
+    def sync_services(self, force: bool = False) -> Tuple[bool, str]:
         """
         Sync services with Nakrutochka API
 
@@ -64,9 +64,9 @@ class ServiceManager:
             # Process each service
             for api_service in api_services:
                 try:
-                    # Prepare service data
+                    # Prepare service data - використовуємо id напряму
                     service_data = {
-                        'service_id': api_service['id'],
+                        'id': api_service['id'],  # Тепер id, а не service_id
                         'name': api_service['name'],
                         'category': api_service.get('category', 'other'),
                         'type': api_service.get('type', SERVICE_TYPE.DEFAULT),
@@ -184,9 +184,9 @@ service_manager = ServiceManager()
 
 
 # Helper functions
-async def get_all_services(category: Optional[str] = None,
-                           active_only: bool = True,
-                           use_cache: bool = True) -> List[Service]:
+def get_all_services(category: Optional[str] = None,
+                     active_only: bool = True,
+                     use_cache: bool = True) -> List[Service]:
     """
     Get all services with optional filtering
 
@@ -201,7 +201,7 @@ async def get_all_services(category: Optional[str] = None,
     try:
         # Auto-sync if needed
         if service_manager.should_update():
-            await service_manager.sync_services()
+            service_manager.sync_services()
 
         return Service.get_all(
             category=category,
@@ -214,7 +214,7 @@ async def get_all_services(category: Optional[str] = None,
         return []
 
 
-async def get_service_by_id(service_id: int, use_cache: bool = True) -> Optional[Service]:
+def get_service_by_id(service_id: int, use_cache: bool = True) -> Optional[Service]:
     """
     Get service by ID
 
@@ -228,9 +228,9 @@ async def get_service_by_id(service_id: int, use_cache: bool = True) -> Optional
     return Service.get_by_id(service_id, use_cache=use_cache)
 
 
-async def get_services_by_category(category: str,
-                                   active_only: bool = True,
-                                   use_cache: bool = True) -> List[Service]:
+def get_services_by_category(category: str,
+                             active_only: bool = True,
+                             use_cache: bool = True) -> List[Service]:
     """
     Get services by category
 
@@ -242,14 +242,14 @@ async def get_services_by_category(category: str,
     Returns:
         List of services
     """
-    return await get_all_services(
+    return get_all_services(
         category=category,
         active_only=active_only,
         use_cache=use_cache
     )
 
 
-async def search_services(query: str, limit: int = 50) -> List[Service]:
+def search_services(query: str, limit: int = 50) -> List[Service]:
     """
     Search services
 
@@ -266,7 +266,7 @@ async def search_services(query: str, limit: int = 50) -> List[Service]:
     return Service.search(query, limit=limit)
 
 
-async def update_services_from_api(force: bool = False) -> Tuple[bool, str]:
+def update_services_from_api(force: bool = False) -> Tuple[bool, str]:
     """
     Update services from Nakrutochka API
 
@@ -276,7 +276,7 @@ async def update_services_from_api(force: bool = False) -> Tuple[bool, str]:
     Returns:
         (success, message)
     """
-    return await service_manager.sync_services(force=force)
+    return service_manager.sync_services(force=force)
 
 
 def calculate_service_price(service_id: int, quantity: int) -> Optional[float]:

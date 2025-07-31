@@ -8,6 +8,7 @@ from flask import Blueprint, request, jsonify, g
 from typing import Optional
 
 from backend.auth.decorators import jwt_required, optional_jwt, rate_limit
+from backend.services.models import Service
 from backend.services.services import (
     get_all_services,
     get_service_by_id,
@@ -30,7 +31,7 @@ services_bp = Blueprint('services', __name__, url_prefix='/api/services')
 
 @services_bp.route('/', methods=['GET'])
 @optional_jwt  # Services are public but may have user-specific pricing
-async def get_services():
+def get_services():
     """
     Get all services
 
@@ -69,9 +70,9 @@ async def get_services():
 
         # Search or filter
         if search_query:
-            services = await search_services(search_query, limit=limit)
+            services = search_services(search_query, limit=limit)
         else:
-            services = await get_all_services(
+            services = get_all_services(
                 category=category,
                 active_only=active_only,
                 use_cache=True
@@ -125,7 +126,7 @@ async def get_services():
 
 @services_bp.route('/<int:service_id>', methods=['GET'])
 @optional_jwt
-async def get_service(service_id: int):
+def get_service(service_id: int):
     """
     Get service details
 
@@ -145,7 +146,7 @@ async def get_service(service_id: int):
     }
     """
     try:
-        service = await get_service_by_id(service_id, use_cache=True)
+        service = get_service_by_id(service_id, use_cache=True)
 
         if not service:
             return jsonify({
@@ -232,7 +233,7 @@ def get_categories():
 @services_bp.route('/sync', methods=['POST'])
 @jwt_required
 @rate_limit(calls=1, period=300)  # 1 sync per 5 minutes
-async def sync_services():
+def sync_services():
     """
     Sync services with Nakrutochka API (Admin only)
 
@@ -264,7 +265,7 @@ async def sync_services():
         force = data.get('force', False)
 
         # Perform sync
-        success, message = await update_services_from_api(force=force)
+        success, message = update_services_from_api(force=force)
 
         # Clear cache after sync
         if hasattr(request.app, 'middleware') and 'cache' in request.app.middleware:

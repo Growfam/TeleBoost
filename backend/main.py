@@ -11,9 +11,6 @@ from flask_cors import CORS
 from datetime import datetime
 from werkzeug.exceptions import HTTPException
 
-# Додаємо backend до sys.path для правильних імпортів
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from backend.config import config
 from backend.supabase_client import supabase
 from backend.utils.redis_client import redis_client
