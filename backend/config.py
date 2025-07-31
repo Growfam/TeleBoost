@@ -45,11 +45,14 @@ class Config:
         'balance': 60,  # 1 хвилина для балансу
         'orders': 180,  # 3 хвилини для замовлень
         'referrals': 600,  # 10 хвилин для рефералів
+        'statistics': 300,  # 5 хвилин для статистики
     }
 
     # Telegram Bot
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
     BOT_USERNAME = os.getenv('BOT_USERNAME', 'TeleBoostBot')
+    TELEGRAM_WEBHOOK_PATH = '/api/telegram/webhook'
+    TELEGRAM_WEBHOOK_SECRET = os.getenv('TELEGRAM_WEBHOOK_SECRET', SECRET_KEY)
 
     # JWT Settings
     JWT_SECRET = os.getenv('JWT_SECRET', SECRET_KEY)
@@ -64,12 +67,18 @@ class Config:
     # CryptoBot
     CRYPTOBOT_TOKEN = os.getenv('CRYPTOBOT_TOKEN', '')
     CRYPTOBOT_WEBHOOK_PATH = '/api/webhooks/cryptobot'
-    CRYPTOBOT_NETWORK = 'mainnet'  # або 'testnet' для тестування
+    CRYPTOBOT_NETWORK = os.getenv('CRYPTOBOT_NETWORK', 'mainnet')  # або 'testnet' для тестування
+    CRYPTOBOT_WEBHOOK_SECRET = os.getenv('CRYPTOBOT_WEBHOOK_SECRET', '')
 
     # NOWPayments
     NOWPAYMENTS_API_KEY = os.getenv('NOWPAYMENTS_API_KEY', '')
     NOWPAYMENTS_IPN_SECRET = os.getenv('NOWPAYMENTS_IPN_SECRET', '')
     NOWPAYMENTS_WEBHOOK_PATH = '/api/webhooks/nowpayments'
+    NOWPAYMENTS_SANDBOX = os.getenv('NOWPAYMENTS_SANDBOX', 'false').lower() == 'true'
+
+    # Monobank
+    MONOBANK_TOKEN = os.getenv('MONOBANK_TOKEN', '')
+    MONOBANK_WEBHOOK_PATH = '/api/webhooks/monobank'
 
     # Rate Limiting
     RATELIMIT_ENABLED = True
@@ -82,8 +91,16 @@ class Config:
         "https://web.telegram.org",
         "https://telegram.org",
         FRONTEND_URL,
-        "http://localhost:3000",  # для розробки
     ]
+
+    # Add localhost for development
+    if DEBUG:
+        CORS_ORIGINS.extend([
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ])
 
     # Security Headers
     SECURITY_HEADERS = {
@@ -96,12 +113,92 @@ class Config:
     # Business Logic
     REFERRAL_BONUS_PERCENT = 10.0  # 10% для реферера
     REFERRAL_USER_BONUS = 5.0  # 5% для нового користувача
-    MIN_DEPOSIT = 100  # Мінімальний депозит
-    MIN_ORDER = 10  # Мінімальне замовлення
+    MIN_DEPOSIT = 100  # Мінімальний депозит в UAH
+    MAX_DEPOSIT = 100000  # Максимальний депозит в UAH
+    MIN_WITHDRAW = 500  # Мінімальне виведення в UAH
+    MAX_WITHDRAW = 50000  # Максимальне виведення в UAH
+    MIN_ORDER = 10  # Мінімальне замовлення в UAH
+    MAX_ORDER = 100000  # Максимальне замовлення в UAH
+
+    # Currency Settings
+    DEFAULT_CURRENCY = 'USD'
+    SUPPORTED_CURRENCIES = ['USD', 'UAH', 'EUR']
+    EXCHANGE_RATES_UPDATE_INTERVAL = 3600  # 1 година
 
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO' if not DEBUG else 'DEBUG')
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    LOG_FILE = os.getenv('LOG_FILE', 'teleboost.log')
+    LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
+    LOG_BACKUP_COUNT = 5
+
+    # Middleware Settings
+    MIDDLEWARE_COMPRESSION_ENABLED = True
+    MIDDLEWARE_COMPRESSION_LEVEL = 6  # 1-9 for gzip
+    MIDDLEWARE_COMPRESSION_MIN_SIZE = 1024  # 1KB
+
+    MIDDLEWARE_CACHE_ENABLED = True
+    MIDDLEWARE_CACHE_DEFAULT_TIMEOUT = 300  # 5 хвилин
+
+    MIDDLEWARE_PERFORMANCE_ENABLED = True
+    MIDDLEWARE_PERFORMANCE_SLOW_REQUEST_THRESHOLD = 1.0  # 1 секунда
+
+    MIDDLEWARE_RATE_LIMIT_BLACKLIST = os.getenv('RATE_LIMIT_BLACKLIST', '').split(',')
+    MIDDLEWARE_RATE_LIMIT_WHITELIST = os.getenv('RATE_LIMIT_WHITELIST', '').split(',')
+
+    # API Settings
+    API_TIMEOUT = 30  # Секунди
+    API_MAX_RETRIES = 3
+    API_RETRY_DELAY = 1.0  # Секунди
+    API_RETRY_BACKOFF = 2.0  # Множник затримки
+
+    # Pagination
+    DEFAULT_PAGE_SIZE = 20
+    MAX_PAGE_SIZE = 100
+
+    # File Upload
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+    # Session
+    SESSION_COOKIE_NAME = 'teleboost_session'
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = not DEBUG  # HTTPS only in production
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)
+
+    # Error Tracking (Sentry)
+    SENTRY_DSN = os.getenv('SENTRY_DSN', '')
+    SENTRY_ENVIRONMENT = ENV
+    SENTRY_TRACES_SAMPLE_RATE = 0.1 if not DEBUG else 1.0
+
+    # Feature Flags
+    FEATURES = {
+        'ORDERS_ENABLED': True,
+        'PAYMENTS_ENABLED': True,
+        'REFERRALS_ENABLED': True,
+        'WITHDRAWALS_ENABLED': True,
+        'SUBSCRIPTIONS_ENABLED': False,
+        'ANALYTICS_ENABLED': True,
+        'MAINTENANCE_MODE': False,
+    }
+
+    # Email Settings (for future use)
+    MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+    MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
+    MAIL_USE_TLS = True
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME', '')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD', '')
+    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@teleboost.com')
+
+    # Background Jobs
+    CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
+    CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
+    CELERY_TASK_SERIALIZER = 'json'
+    CELERY_RESULT_SERIALIZER = 'json'
+    CELERY_ACCEPT_CONTENT = ['json']
+    CELERY_TIMEZONE = 'UTC'
+    CELERY_ENABLE_UTC = True
 
     @classmethod
     def validate(cls):
@@ -111,7 +208,13 @@ class Config:
             ('SUPABASE_SERVICE_KEY', cls.SUPABASE_SERVICE_KEY),
             ('TELEGRAM_BOT_TOKEN', cls.TELEGRAM_BOT_TOKEN),
             ('NAKRUTOCHKA_API_KEY', cls.NAKRUTOCHKA_API_KEY),
+        ]
+
+        # Payment providers - at least one required
+        payment_providers = [
             ('CRYPTOBOT_TOKEN', cls.CRYPTOBOT_TOKEN),
+            ('NOWPAYMENTS_API_KEY', cls.NOWPAYMENTS_API_KEY),
+            ('MONOBANK_TOKEN', cls.MONOBANK_TOKEN),
         ]
 
         missing = []
@@ -119,8 +222,17 @@ class Config:
             if not value:
                 missing.append(name)
 
+        # Check if at least one payment provider is configured
+        if not any(value for _, value in payment_providers):
+            missing.append('At least one payment provider')
+
         if missing:
             raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+
+        # Validate URLs
+        for url_name, url_value in [('BACKEND_URL', cls.BACKEND_URL), ('FRONTEND_URL', cls.FRONTEND_URL)]:
+            if url_value and not url_value.startswith(('http://', 'https://')):
+                raise ValueError(f"{url_name} must start with http:// or https://")
 
         return True
 
@@ -134,9 +246,30 @@ class Config:
             'FRONTEND_URL': cls.FRONTEND_URL,
             'BOT_USERNAME': cls.BOT_USERNAME,
             'REFERRAL_BONUS_PERCENT': cls.REFERRAL_BONUS_PERCENT,
+            'REFERRAL_USER_BONUS': cls.REFERRAL_USER_BONUS,
             'MIN_DEPOSIT': cls.MIN_DEPOSIT,
+            'MAX_DEPOSIT': cls.MAX_DEPOSIT,
+            'MIN_WITHDRAW': cls.MIN_WITHDRAW,
+            'MAX_WITHDRAW': cls.MAX_WITHDRAW,
             'MIN_ORDER': cls.MIN_ORDER,
+            'MAX_ORDER': cls.MAX_ORDER,
+            'DEFAULT_CURRENCY': cls.DEFAULT_CURRENCY,
+            'SUPPORTED_CURRENCIES': cls.SUPPORTED_CURRENCIES,
+            'FEATURES': cls.FEATURES,
+            'DEFAULT_PAGE_SIZE': cls.DEFAULT_PAGE_SIZE,
+            'MAX_PAGE_SIZE': cls.MAX_PAGE_SIZE,
+            'CACHE_TTL': cls.CACHE_TTL,
         }
+
+    @classmethod
+    def get_webhook_url(cls, path: str) -> str:
+        """Отримати повний URL для webhook"""
+        return f"{cls.BACKEND_URL}{path}"
+
+    @classmethod
+    def is_feature_enabled(cls, feature: str) -> bool:
+        """Перевірити чи увімкнена функція"""
+        return cls.FEATURES.get(feature, False)
 
 
 # Створюємо екземпляр конфігурації

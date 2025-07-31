@@ -254,6 +254,50 @@ class RedisClient:
             logger.error(f"Redis srem error for {key}: {e}")
             return 0
 
+    def zadd(self, key: str, mapping: Dict[Any, float]) -> int:
+        """Додати елементи в sorted set"""
+        if not self.client:
+            return 0
+
+        try:
+            return self.client.zadd(key, mapping)
+        except Exception as e:
+            logger.error(f"Redis zadd error for {key}: {e}")
+            return 0
+
+    def zcard(self, key: str) -> int:
+        """Отримати кількість елементів в sorted set"""
+        if not self.client:
+            return 0
+
+        try:
+            return self.client.zcard(key)
+        except Exception as e:
+            logger.error(f"Redis zcard error for {key}: {e}")
+            return 0
+
+    def zremrangebyscore(self, key: str, min: Any, max: Any) -> int:
+        """Видалити елементи з sorted set за score"""
+        if not self.client:
+            return 0
+
+        try:
+            return self.client.zremrangebyscore(key, min, max)
+        except Exception as e:
+            logger.error(f"Redis zremrangebyscore error for {key}: {e}")
+            return 0
+
+    def zrange(self, key: str, start: int, end: int, withscores: bool = False) -> list:
+        """Отримати елементи з sorted set"""
+        if not self.client:
+            return []
+
+        try:
+            return self.client.zrange(key, start, end, withscores=withscores)
+        except Exception as e:
+            logger.error(f"Redis zrange error for {key}: {e}")
+            return []
+
     def keys(self, pattern: str) -> List[str]:
         """Знайти ключі за паттерном"""
         if not self.client:
@@ -264,6 +308,20 @@ class RedisClient:
         except Exception as e:
             logger.error(f"Redis keys error for pattern {pattern}: {e}")
             return []
+
+    def clear_pattern(self, pattern: str) -> int:
+        """Видалити всі ключі за паттерном"""
+        if not self.client:
+            return 0
+
+        try:
+            keys = self.keys(pattern)
+            if keys:
+                return self.delete(*keys)
+            return 0
+        except Exception as e:
+            logger.error(f"Redis clear pattern error: {e}")
+            return 0
 
     def flushdb(self) -> bool:
         """Очистити всю БД (обережно!)"""
@@ -299,6 +357,118 @@ class RedisClient:
         except Exception as e:
             logger.error(f"Redis pipeline execute error: {e}")
             return []
+
+    def setex(self, key: str, seconds: int, value: Any) -> bool:
+        """Встановити значення з TTL"""
+        if not self.client:
+            return False
+
+        try:
+            serialized = self._serialize(value)
+            return self.client.setex(key, seconds, serialized)
+        except Exception as e:
+            logger.error(f"Redis setex error for key {key}: {e}")
+            return False
+
+    def lpush(self, key: str, *values: Any) -> int:
+        """Додати елементи на початок списку"""
+        if not self.client:
+            return 0
+
+        try:
+            serialized = [self._serialize(v) for v in values]
+            return self.client.lpush(key, *serialized)
+        except Exception as e:
+            logger.error(f"Redis lpush error for {key}: {e}")
+            return 0
+
+    def rpush(self, key: str, *values: Any) -> int:
+        """Додати елементи в кінець списку"""
+        if not self.client:
+            return 0
+
+        try:
+            serialized = [self._serialize(v) for v in values]
+            return self.client.rpush(key, *serialized)
+        except Exception as e:
+            logger.error(f"Redis rpush error for {key}: {e}")
+            return 0
+
+    def lrange(self, key: str, start: int, end: int, data_type: str = 'auto') -> List[Any]:
+        """Отримати елементи списку"""
+        if not self.client:
+            return []
+
+        try:
+            values = self.client.lrange(key, start, end)
+            return [self._deserialize(v, data_type) for v in values]
+        except Exception as e:
+            logger.error(f"Redis lrange error for {key}: {e}")
+            return []
+
+    def llen(self, key: str) -> int:
+        """Отримати довжину списку"""
+        if not self.client:
+            return 0
+
+        try:
+            return self.client.llen(key)
+        except Exception as e:
+            logger.error(f"Redis llen error for {key}: {e}")
+            return 0
+
+    def lpop(self, key: str, data_type: str = 'auto') -> Any:
+        """Видалити та повернути перший елемент списку"""
+        if not self.client:
+            return None
+
+        try:
+            value = self.client.lpop(key)
+            if value is None:
+                return None
+            return self._deserialize(value, data_type)
+        except Exception as e:
+            logger.error(f"Redis lpop error for {key}: {e}")
+            return None
+
+    def rpop(self, key: str, data_type: str = 'auto') -> Any:
+        """Видалити та повернути останній елемент списку"""
+        if not self.client:
+            return None
+
+        try:
+            value = self.client.rpop(key)
+            if value is None:
+                return None
+            return self._deserialize(value, data_type)
+        except Exception as e:
+            logger.error(f"Redis rpop error for {key}: {e}")
+            return None
+
+    def publish(self, channel: str, message: Any) -> int:
+        """Опублікувати повідомлення в канал"""
+        if not self.client:
+            return 0
+
+        try:
+            serialized = self._serialize(message)
+            return self.client.publish(channel, serialized)
+        except Exception as e:
+            logger.error(f"Redis publish error for channel {channel}: {e}")
+            return 0
+
+    def subscribe(self, *channels: str):
+        """Підписатися на канали"""
+        if not self.client:
+            return None
+
+        try:
+            pubsub = self.client.pubsub()
+            pubsub.subscribe(*channels)
+            return pubsub
+        except Exception as e:
+            logger.error(f"Redis subscribe error: {e}")
+            return None
 
 
 # Створюємо глобальний екземпляр
@@ -336,7 +506,7 @@ def get_cached_user_data(user_id: str) -> Optional[dict]:
     return cache_get(key, data_type='json')
 
 
-def invalidate_user_cache(user_id: str):
+def invalidate_user_cache(user_id: str) -> int:
     """Інвалідувати весь кеш користувача"""
     from backend.utils.constants import CACHE_KEYS
     patterns = [
@@ -346,3 +516,52 @@ def invalidate_user_cache(user_id: str):
         CACHE_KEYS.format(CACHE_KEYS.USER_REFERRALS, user_id=user_id),
     ]
     return cache_delete(*patterns)
+
+
+def cache_service_data(service_id: int, data: dict, ttl: int = None) -> bool:
+    """Кешувати дані сервісу"""
+    from backend.utils.constants import CACHE_KEYS
+    key = CACHE_KEYS.format(CACHE_KEYS.SERVICE, service_id=service_id)
+    ttl = ttl or config.CACHE_TTL.get('services', 3600)
+    return cache_set(key, data, ttl)
+
+
+def get_cached_service_data(service_id: int) -> Optional[dict]:
+    """Отримати кешовані дані сервісу"""
+    from backend.utils.constants import CACHE_KEYS
+    key = CACHE_KEYS.format(CACHE_KEYS.SERVICE, service_id=service_id)
+    return cache_get(key, data_type='json')
+
+
+def invalidate_service_cache(service_id: Optional[int] = None) -> int:
+    """Інвалідувати кеш сервісів"""
+    from backend.utils.constants import CACHE_KEYS
+
+    if service_id:
+        # Конкретний сервіс
+        key = CACHE_KEYS.format(CACHE_KEYS.SERVICE, service_id=service_id)
+        return cache_delete(key)
+    else:
+        # Всі сервіси
+        pattern = "service:*"
+        deleted = redis_client.clear_pattern(pattern)
+        # Також очищаємо список всіх сервісів
+        cache_delete(CACHE_KEYS.SERVICES)
+        return deleted + 1
+
+
+def get_or_set_cache(key: str, callback: callable, ttl: int = 300, data_type: str = 'auto') -> Any:
+    """Отримати з кешу або встановити через callback"""
+    # Спробуємо отримати з кешу
+    cached = cache_get(key, data_type=data_type)
+    if cached is not None:
+        return cached
+
+    # Викликаємо callback для отримання даних
+    data = callback()
+
+    # Кешуємо результат
+    if data is not None:
+        cache_set(key, data, ttl)
+
+    return data

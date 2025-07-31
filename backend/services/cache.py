@@ -1,5 +1,10 @@
+# backend/services/cache.py
+"""
+TeleBoost Services Cache
+Кешування сервісів з Nakrutochka API
+"""
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 
 from backend.api.nakrutochka_api import nakrutochka

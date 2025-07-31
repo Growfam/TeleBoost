@@ -94,6 +94,8 @@ class SERVICE_TYPE:
     POLL = 'poll'
     INVITES_FROM_GROUPS = 'invites_from_groups'
     SUBSCRIPTIONS = 'subscriptions'
+    DRIP_FEED = 'drip_feed'
+    SUBSCRIPTION = 'subscription'
 
 
 # Референтні винагороди
@@ -111,6 +113,9 @@ LIMITS = {
     'MIN_ORDER': 10,
     'MAX_ORDER': 100000,
     'MAX_REFERRAL_LEVELS': 1,  # Тільки один рівень рефералів
+    'MAX_COMMENT_LENGTH': 1000,  # Максимальна довжина коментаря
+    'MAX_COMMENTS_PER_ORDER': 10000,  # Максимум коментарів в замовленні
+    'MAX_ACTIVE_ORDERS': 50,  # Максимум активних замовлень на користувача
 }
 
 # Комісії
@@ -141,6 +146,27 @@ class CACHE_KEYS:
         return key.format(**kwargs)
 
 
+# Cache префікси для middleware
+CACHE_PREFIX = {
+    'services': 'cache:services',
+    'users': 'cache:users',
+    'orders': 'cache:orders',
+    'response': 'response:',
+    'statistics': 'cache:stats',
+    'referrals': 'cache:referrals',
+}
+
+# Cache TTL для різних типів даних
+CACHE_TTL = {
+    'services': 3600,  # 1 година
+    'user': 300,  # 5 хвилин
+    'balance': 60,  # 1 хвилина
+    'orders': 180,  # 3 хвилини
+    'referrals': 600,  # 10 хвилин
+    'statistics': 300,  # 5 хвилин
+    'exchange_rates': 3600,  # 1 година
+}
+
 # Telegram limits
 TELEGRAM_LIMITS = {
     'USERNAME_MIN_LENGTH': 5,
@@ -148,6 +174,8 @@ TELEGRAM_LIMITS = {
     'FIRST_NAME_MAX_LENGTH': 64,
     'LAST_NAME_MAX_LENGTH': 64,
     'MESSAGE_MAX_LENGTH': 4096,
+    'CAPTION_MAX_LENGTH': 1024,
+    'CALLBACK_DATA_MAX_LENGTH': 64,
 }
 
 # Error messages
@@ -164,6 +192,11 @@ ERROR_MESSAGES = {
     'LIMIT_EXCEEDED': 'Перевищено ліміт',
     'RATE_LIMIT': 'Занадто багато запитів',
     'INTERNAL_ERROR': 'Внутрішня помилка сервера',
+    'MAINTENANCE_MODE': 'Сервіс на технічному обслуговуванні',
+    'FEATURE_DISABLED': 'Ця функція тимчасово недоступна',
+    'INVALID_REFERRAL_CODE': 'Недійсний реферальний код',
+    'SELF_REFERRAL': 'Не можна використовувати власний реферальний код',
+    'ALREADY_REFERRED': 'Ви вже були запрошені іншим користувачем',
 }
 
 # Success messages
@@ -173,9 +206,12 @@ SUCCESS_MESSAGES = {
     'PAYMENT_CREATED': 'Платіж створено',
     'PAYMENT_SUCCESS': 'Платіж успішно оброблено',
     'BALANCE_UPDATED': 'Баланс оновлено',
+    'WITHDRAWAL_REQUESTED': 'Запит на виведення прийнято',
+    'PROFILE_UPDATED': 'Профіль оновлено',
+    'REFERRAL_ACTIVATED': 'Реферальний код активовано',
 }
 
-# Nakrutochka API endpoints
+# Nakrutochka API endpoints (Legacy - for compatibility)
 NAKRUTOCHKA_ENDPOINTS = {
     'SERVICES': '/services',
     'ORDER': '/order',
@@ -187,6 +223,41 @@ NAKRUTOCHKA_ENDPOINTS = {
     'CANCEL': '/cancel',
 }
 
+# Add OrderStatus and ServiceType aliases for nakrutochka_api.py
+OrderStatus = ORDER_STATUS
+ServiceType = SERVICE_TYPE
+
+
+# Payment providers
+class PAYMENT_PROVIDERS:
+    """Доступні платіжні провайдери"""
+    CRYPTOBOT = 'cryptobot'
+    NOWPAYMENTS = 'nowpayments'
+    MONOBANK = 'monobank'
+
+    @classmethod
+    def all(cls) -> list:
+        return [cls.CRYPTOBOT, cls.NOWPAYMENTS, cls.MONOBANK]
+
+    @classmethod
+    def crypto(cls) -> list:
+        return [cls.CRYPTOBOT, cls.NOWPAYMENTS]
+
+    @classmethod
+    def fiat(cls) -> list:
+        return [cls.MONOBANK]
+
+
+# Supported cryptocurrencies
+CRYPTO_CURRENCIES = {
+    'BTC': {'name': 'Bitcoin', 'decimals': 8},
+    'ETH': {'name': 'Ethereum', 'decimals': 18},
+    'USDT': {'name': 'Tether', 'decimals': 6},
+    'TON': {'name': 'Toncoin', 'decimals': 9},
+    'BNB': {'name': 'Binance Coin', 'decimals': 18},
+    'TRX': {'name': 'TRON', 'decimals': 6},
+}
+
 # Регулярні вирази
 REGEX_PATTERNS = {
     'TELEGRAM_USERNAME': r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$',
@@ -195,4 +266,99 @@ REGEX_PATTERNS = {
     'TELEGRAM_URL': r'^https?:\/\/(www\.)?(t\.me|telegram\.me)\/.*$',
     'YOUTUBE_URL': r'^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/.*$',
     'TIKTOK_URL': r'^https?:\/\/(www\.)?tiktok\.com\/.*$',
+    'TWITTER_URL': r'^https?:\/\/(www\.)?(twitter\.com|x\.com)\/.*$',
+    'FACEBOOK_URL': r'^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.*$',
+    'EMAIL': r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    'PHONE_UA': r'^(\+?38)?(0\d{9})$',
+    'UUID': r'^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$',
+}
+
+# Social media categories
+SOCIAL_MEDIA_CATEGORIES = {
+    'instagram': {
+        'name': 'Instagram',
+        'icon': '📷',
+        'color': '#E4405F',
+        'services': ['followers', 'likes', 'views', 'comments', 'reels', 'story', 'live'],
+    },
+    'telegram': {
+        'name': 'Telegram',
+        'icon': '✈️',
+        'color': '#0088CC',
+        'services': ['members', 'views', 'reactions', 'comments', 'votes'],
+    },
+    'youtube': {
+        'name': 'YouTube',
+        'icon': '📺',
+        'color': '#FF0000',
+        'services': ['subscribers', 'views', 'likes', 'comments', 'shorts'],
+    },
+    'tiktok': {
+        'name': 'TikTok',
+        'icon': '🎵',
+        'color': '#000000',
+        'services': ['followers', 'likes', 'views', 'comments', 'shares'],
+    },
+    'twitter': {
+        'name': 'Twitter / X',
+        'icon': '🐦',
+        'color': '#1DA1F2',
+        'services': ['followers', 'likes', 'retweets', 'comments', 'views'],
+    },
+    'facebook': {
+        'name': 'Facebook',
+        'icon': '👤',
+        'color': '#1877F2',
+        'services': ['likes', 'followers', 'views', 'comments', 'shares'],
+    },
+}
+
+# Bot commands
+BOT_COMMANDS = {
+    'start': 'Почати роботу з ботом',
+    'help': 'Допомога',
+    'balance': 'Баланс',
+    'orders': 'Мої замовлення',
+    'referral': 'Реферальна програма',
+    'support': 'Підтримка',
+    'settings': 'Налаштування',
+    'language': 'Змінити мову',
+}
+
+# Supported languages
+LANGUAGES = {
+    'uk': {'name': 'Українська', 'flag': '🇺🇦'},
+    'en': {'name': 'English', 'flag': '🇬🇧'},
+    'ru': {'name': 'Русский', 'flag': '🇷🇺'},
+}
+
+# Order priorities
+ORDER_PRIORITIES = {
+    'low': {'name': 'Низький', 'multiplier': 1.0},
+    'normal': {'name': 'Звичайний', 'multiplier': 1.0},
+    'high': {'name': 'Високий', 'multiplier': 1.2},
+    'urgent': {'name': 'Терміновий', 'multiplier': 1.5},
+}
+
+# Time intervals for drip-feed
+DRIP_FEED_INTERVALS = {
+    '1m': 1,  # 1 хвилина
+    '5m': 5,  # 5 хвилин
+    '10m': 10,  # 10 хвилин
+    '30m': 30,  # 30 хвилин
+    '1h': 60,  # 1 година
+    '2h': 120,  # 2 години
+    '6h': 360,  # 6 годин
+    '12h': 720,  # 12 годин
+    '24h': 1440,  # 24 години
+}
+
+# Default values
+DEFAULTS = {
+    'LANGUAGE': 'uk',
+    'CURRENCY': 'USD',
+    'PAGE_SIZE': 20,
+    'ORDER_PRIORITY': 'normal',
+    'DRIP_FEED_INTERVAL': '1h',
+    'REFERRAL_BONUS': 10.0,  # відсотки
 }
