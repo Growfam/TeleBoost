@@ -1,0 +1,30 @@
+# Core
+Flask==3.0.3
+Flask-Cors==6.0.0
+Flask-Caching==2.3.0
+Flask-Limiter==3.8.0
+
+# Database & Cache
+supabase==2.7.4
+redis==5.0.8
+hiredis==3.0.0
+
+# Async & Performance
+gevent==24.2.1
+greenlet==3.1.1
+gunicorn[gevent]==23.0.0
+
+# API & Auth
+requests==2.32.3
+httpx==0.27.0
+PyJWT==2.8.0
+cryptography==42.0.5
+
+# Utilities
+python-dotenv==1.0.1
+python-json-logger==2.0.7
+orjson==3.10.7
+
+# Monitoring
+prometheus-flask-exporter==0.23.1
+sentry-sdk[flask]==2.13.0

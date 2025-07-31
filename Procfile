@@ -1,0 +1,1 @@
+web: gunicorn --bind 0.0.0.0:$PORT backend.main:app --workers 4 --worker-class gevent --worker-connections 1000 --max-requests 1000 --max-requests-jitter 50 --timeout 30 --keep-alive 5 --log-level info --access-logfile - --error-logfile -

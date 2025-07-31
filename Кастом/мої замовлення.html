@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoostGram - Мої замовлення</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .background {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #000 0%, #1a0033 50%, #000 100%);
+            z-index: -2;
+        }
+
+        .floating-orbs {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .orb1 {
+            width: 400px;
+            height: 400px;
+            background: #6b46c1;
+            top: -200px;
+            left: -200px;
+            animation-delay: 0s;
+        }
+
+        .orb2 {
+            width: 300px;
+            height: 300px;
+            background: #9333ea;
+            bottom: -150px;
+            right: -150px;
+            animation-delay: 5s;
+        }
+
+        .orb3 {
+            width: 250px;
+            height: 250px;
+            background: #7c3aed;
+            top: 50%;
+            left: 50%;
+            animation-delay: 10s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(50px, -50px) scale(1.1); }
+            50% { transform: translate(-50px, 50px) scale(0.9); }
+            75% { transform: translate(30px, 30px) scale(1.05); }
+        }
+
+        .container {
+            max-width: 430px;
+            margin: 0 auto;
+            padding: 20px;
+            padding-bottom: 100px;
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .back-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 20px;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.05);
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a78bfa 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats-summary {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 25px;
+            animation: slideUp 0.6s ease-out 0.1s both;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .stat-mini {
+            text-align: center;
+        }
+
+        .stat-mini-value {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-mini-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .search-filter-section {
+            margin-bottom: 25px;
+            animation: slideUp 0.6s ease-out 0.2s both;
+        }
+
+        .search-bar {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .search-icon {
+            font-size: 20px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .search-input {
+            flex: 1;
+            background: none;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            color: #fff;
+        }
+
+        .search-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            scrollbar-width: none;
+        }
+
+        .filter-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .filter-tab {
+            flex-shrink: 0;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-tab:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .filter-tab.active {
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            border-color: transparent;
+            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
+        }
+
+        .filter-count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .orders-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            animation: slideUp 0.6s ease-out 0.3s both;
+        }
+
+        .order-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .order-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: #22c55e;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .order-card.status-active::before {
+            background: #3b82f6;
+            opacity: 1;
+        }
+
+        .order-card.status-completed::before {
+            background: #22c55e;
+            opacity: 1;
+        }
+
+        .order-card.status-cancelled::before {
+            background: #ef4444;
+            opacity: 1;
+        }
+
+        .order-card.status-paused::before {
+            background: #f59e0b;
+            opacity: 1;
+        }
+
+        .order-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(5px);
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .order-main-info {
+            flex: 1;
+        }
+
+        .order-id {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 4px;
+        }
+
+        .order-service {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .order-link {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 200px;
+        }
+
+        .order-status {
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-active {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .status-completed {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .status-cancelled {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .status-paused {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .order-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .order-detail {
+            text-align: center;
+        }
+
+        .detail-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .detail-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .order-progress {
+            margin-bottom: 8px;
+        }
+
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            height: 6px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #7c3aed 0%, #a855f7 100%);
+            border-radius: 6px;
+            transition: width 0.5s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .order-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .order-date {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .order-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .empty-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-text {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 24px;
+        }
+
+        .empty-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            border-radius: 12px;
+            color: #fff;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .empty-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(168, 85, 247, 0.4);
+        }
+
+        .loading-skeleton {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .skeleton-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 16px;
+            height: 180px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skeleton-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+            animation: skeletonLoading 1.5s infinite;
+        }
+
+        @keyframes skeletonLoading {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal {
+            background: rgba(20, 10, 30, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            max-width: 400px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideUp 0.3s ease-out;
+        }
+
+        @keyframes modalSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .close-modal {
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .close-modal:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            max-width: 430px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-around;
+            padding: 0 20px;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 12px;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-item.active {
+            background: rgba(124, 58, 237, 0.2);
+        }
+
+        .nav-icon {
+            font-size: 24px;
+        }
+
+        .nav-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="background"></div>
+    <div class="floating-orbs">
+        <div class="orb orb1"></div>
+        <div class="orb orb2"></div>
+        <div class="orb orb3"></div>
+    </div>
+
+    <div class="container">
+        <header class="header">
+            <div class="back-btn">←</div>
+            <h1 class="page-title">Мої замовлення</h1>
+            <div style="width: 40px;"></div>
+        </header>
+
+        <div class="stats-summary">
+            <div class="stat-mini">
+                <div class="stat-mini-value">247</div>
+                <div class="stat-mini-label">Всього</div>
+            </div>
+            <div class="stat-mini">
+                <div class="stat-mini-value" style="color: #3b82f6;">12</div>
+                <div class="stat-mini-label">Активні</div>
+            </div>
+            <div class="stat-mini">
+                <div class="stat-mini-value" style="color: #22c55e;">231</div>
+                <div class="stat-mini-label">Виконані</div>
+            </div>
+            <div class="stat-mini">
+                <div class="stat-mini-value" style="color: #ef4444;">4</div>
+                <div class="stat-mini-label">Скасовані</div>
+            </div>
+        </div>
+
+        <div class="search-filter-section">
+            <div class="search-bar">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" placeholder="Пошук по ID або назві..." id="searchInput">
+            </div>
+
+            <div class="filter-tabs">
+                <div class="filter-tab active" data-filter="all">
+                    <span>Всі</span>
+                    <span class="filter-count">247</span>
+                </div>
+                <div class="filter-tab" data-filter="active">
+                    <span>🔵 Активні</span>
+                    <span class="filter-count">12</span>
+                </div>
+                <div class="filter-tab" data-filter="completed">
+                    <span>✅ Виконані</span>
+                    <span class="filter-count">231</span>
+                </div>
+                <div class="filter-tab" data-filter="paused">
+                    <span>⏸ Призупинені</span>
+                    <span class="filter-count">0</span>
+                </div>
+                <div class="filter-tab" data-filter="cancelled">
+                    <span>❌ Скасовані</span>
+                    <span class="filter-count">4</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="orders-list" id="ordersList">
+            <!-- Active Order -->
+            <div class="order-card status-active" data-status="active" data-id="125847">
+                <div class="order-header">
+                    <div class="order-main-info">
+                        <div class="order-id">#125847</div>
+                        <div class="order-service">
+                            <span>👥</span>
+                            <span>Підписники UA | R30</span>
+                        </div>
+                        <div class="order-link">t.me/my_awesome_channel</div>
+                    </div>
+                    <div class="order-status status-active">Активне</div>
+                </div>
+
+                <div class="order-details">
+                    <div class="order-detail">
+                        <div class="detail-label">Кількість</div>
+                        <div class="detail-value">5,000</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Виконано</div>
+                        <div class="detail-value">3,241</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Швидкість</div>
+                        <div class="detail-value">~500/год</div>
+                    </div>
+                </div>
+
+                <div class="order-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 65%"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span>65% виконано</span>
+                        <span>~3 год до завершення</span>
+                    </div>
+                </div>
+
+                <div class="order-footer">
+                    <div class="order-date">Сьогодні, 14:23</div>
+                    <div class="order-actions">
+                        <button class="action-btn">Деталі</button>
+                        <button class="action-btn">Призупинити</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Order 2 -->
+            <div class="order-card status-active" data-status="active" data-id="125846">
+                <div class="order-header">
+                    <div class="order-main-info">
+                        <div class="order-id">#125846</div>
+                        <div class="order-service">
+                            <span>👀</span>
+                            <span>Авто перегляди СНГ</span>
+                        </div>
+                        <div class="order-link">t.me/channel/12345</div>
+                    </div>
+                    <div class="order-status status-active">Активне</div>
+                </div>
+
+                <div class="order-details">
+                    <div class="order-detail">
+                        <div class="detail-label">На пост</div>
+                        <div class="detail-value">10,000</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Постів</div>
+                        <div class="detail-value">∞</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Дні</div>
+                        <div class="detail-value">28/30</div>
+                    </div>
+                </div>
+
+                <div class="order-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 93%"></div>
+                    </div>
+                    <div class="progress-info">
+                        <span>Активна підписка</span>
+                        <span>2 дні залишилось</span>
+                    </div>
+                </div>
+
+                <div class="order-footer">
+                    <div class="order-date">28 днів тому</div>
+                    <div class="order-actions">
+                        <button class="action-btn">Деталі</button>
+                        <button class="action-btn">Продовжити</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Completed Order -->
+            <div class="order-card status-completed" data-status="completed" data-id="125845">
+                <div class="order-header">
+                    <div class="order-main-info">
+                        <div class="order-id">#125845</div>
+                        <div class="order-service">
+                            <span>❤️</span>
+                            <span>Реакції на пост - Серця</span>
+                        </div>
+                        <div class="order-link">t.me/channel/12345/678</div>
+                    </div>
+                    <div class="order-status status-completed">Виконано</div>
+                </div>
+
+                <div class="order-details">
+                    <div class="order-detail">
+                        <div class="detail-label">Кількість</div>
+                        <div class="detail-value">1,000</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Виконано</div>
+                        <div class="detail-value">1,000</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Ціна</div>
+                        <div class="detail-value">₴30</div>
+                    </div>
+                </div>
+
+                <div class="order-footer">
+                    <div class="order-date">Вчора, 18:45</div>
+                    <div class="order-actions">
+                        <button class="action-btn">Деталі</button>
+                        <button class="action-btn">Повторити</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Completed Order 2 -->
+            <div class="order-card status-completed" data-status="completed" data-id="125844">
+                <div class="order-header">
+                    <div class="order-main-info">
+                        <div class="order-id">#125844</div>
+                        <div class="order-service">
+                            <span>🚀</span>
+                            <span>Premium буст | 7 днів</span>
+                        </div>
+                        <div class="order-link">t.me/premium_channel</div>
+                    </div>
+                    <div class="order-status status-completed">Виконано</div>
+                </div>
+
+                <div class="order-details">
+                    <div class="order-detail">
+                        <div class="detail-label">Бустів</div>
+                        <div class="detail-value">100</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Період</div>
+                        <div class="detail-value">7 днів</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Ціна</div>
+                        <div class="detail-value">₴3,300</div>
+                    </div>
+                </div>
+
+                <div class="order-footer">
+                    <div class="order-date">2 дні тому</div>
+                    <div class="order-actions">
+                        <button class="action-btn">Деталі</button>
+                        <button class="action-btn">Повторити</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cancelled Order -->
+            <div class="order-card status-cancelled" data-status="cancelled" data-id="125843">
+                <div class="order-header">
+                    <div class="order-main-info">
+                        <div class="order-id">#125843</div>
+                        <div class="order-service">
+                            <span>🤖</span>
+                            <span>Бот СТАРТ Premium</span>
+                        </div>
+                        <div class="order-link">t.me/my_bot</div>
+                    </div>
+                    <div class="order-status status-cancelled">Скасовано</div>
+                </div>
+
+                <div class="order-details">
+                    <div class="order-detail">
+                        <div class="detail-label">Замовлено</div>
+                        <div class="detail-value">1,000</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Виконано</div>
+                        <div class="detail-value">0</div>
+                    </div>
+                    <div class="order-detail">
+                        <div class="detail-label">Повернено</div>
+                        <div class="detail-value">₴665</div>
+                    </div>
+                </div>
+
+                <div class="order-footer">
+                    <div class="order-date">5 днів тому</div>
+                    <div class="order-actions">
+                        <button class="action-btn">Деталі</button>
+                        <button class="action-btn">Замовити знову</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State (hidden by default) -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <div class="empty-icon">📦</div>
+            <h2 class="empty-title">Замовлень не знайдено</h2>
+            <p class="empty-text">У вас ще немає замовлень або вони не відповідають фільтру</p>
+            <a href="#" class="empty-btn">Створити замовлення</a>
+        </div>
+
+        <!-- Loading State (hidden by default) -->
+        <div class="loading-skeleton" id="loadingState" style="display: none;">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+        </div>
+    </div>
+
+    <nav class="nav-bar">
+        <div class="nav-container">
+            <div class="nav-item">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Головна</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">📦</span>
+                <span class="nav-label">Послуги</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">💳</span>
+                <span class="nav-label">Баланс</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">👤</span>
+                <span class="nav-label">Профіль</span>
+            </div>
+        </div>
+    </nav>
+
+    <script>
+        // Filter functionality
+        const filterTabs = document.querySelectorAll('.filter-tab');
+        const orderCards = document.querySelectorAll('.order-card');
+        const ordersList = document.getElementById('ordersList');
+        const emptyState = document.getElementById('emptyState');
+
+        filterTabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Remove active class from all tabs
+                filterTabs.forEach(t => t.classList.remove('active'));
+                // Add active class to clicked tab
+                this.classList.add('active');
+
+                const filter = this.dataset.filter;
+                filterOrders(filter);
+            });
+        });
+
+        function filterOrders(filter) {
+            let visibleCount = 0;
+
+            orderCards.forEach(card => {
+                if (filter === 'all' || card.dataset.status === filter) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            // Show/hide empty state
+            if (visibleCount === 0) {
+                ordersList.style.display = 'none';
+                emptyState.style.display = 'block';
+            } else {
+                ordersList.style.display = 'flex';
+                emptyState.style.display = 'none';
+            }
+        }
+
+        // Search functionality
+        const searchInput = document.getElementById('searchInput');
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            let visibleCount = 0;
+
+            orderCards.forEach(card => {
+                const orderId = card.dataset.id;
+                const serviceName = card.querySelector('.order-service').textContent.toLowerCase();
+                const orderLink = card.querySelector('.order-link').textContent.toLowerCase();
+
+                if (orderId.includes(searchTerm) ||
+                    serviceName.includes(searchTerm) ||
+                    orderLink.includes(searchTerm)) {
+                    card.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            // Show/hide empty state
+            if (visibleCount === 0) {
+                ordersList.style.display = 'none';
+                emptyState.style.display = 'block';
+            } else {
+                ordersList.style.display = 'flex';
+                emptyState.style.display = 'none';
+            }
+        });
+
+        // Order card click handler
+        orderCards.forEach(card => {
+            card.addEventListener('click', function(e) {
+                // Don't open details if action button was clicked
+                if (e.target.classList.contains('action-btn')) {
+                    e.stopPropagation();
+                    handleAction(e.target.textContent, this.dataset.id);
+                    return;
+                }
+
+                // Open order details
+                openOrderDetails(this.dataset.id);
+            });
+        });
+
+        function handleAction(action, orderId) {
+            switch(action) {
+                case 'Деталі':
+                    openOrderDetails(orderId);
+                    break;
+                case 'Призупинити':
+                    if (confirm('Призупинити замовлення #' + orderId + '?')) {
+                        // Pause order logic
+                        alert('Замовлення призупинено');
+                    }
+                    break;
+                case 'Продовжити':
+                    if (confirm('Продовжити підписку?')) {
+                        // Extend subscription logic
+                        alert('Підписку продовжено');
+                    }
+                    break;
+                case 'Повторити':
+                case 'Замовити знову':
+                    if (confirm('Повторити замовлення #' + orderId + '?')) {
+                        // Repeat order logic
+                        alert('Створено нове замовлення');
+                    }
+                    break;
+            }
+        }
+
+        function openOrderDetails(orderId) {
+            // Open detailed order view
+            alert('Відкриття деталей замовлення #' + orderId);
+        }
+
+        // Auto-refresh for active orders
+        function updateActiveOrders() {
+            const activeOrders = document.querySelectorAll('.order-card.status-active');
+            activeOrders.forEach(order => {
+                const progressFill = order.querySelector('.progress-fill');
+                if (progressFill) {
+                    // Simulate progress update
+                    const currentWidth = parseInt(progressFill.style.width);
+                    if (currentWidth < 100) {
+                        const newWidth = Math.min(currentWidth + Math.random() * 2, 100);
+                        progressFill.style.width = newWidth + '%';
+
+                        const progressInfo = order.querySelector('.progress-info span');
+                        if (progressInfo) {
+                            progressInfo.textContent = Math.round(newWidth) + '% виконано';
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update active orders every 5 seconds
+        setInterval(updateActiveOrders, 5000);
+
+        // Add loading animation on page load
+        window.addEventListener('load', () => {
+            // Simulate loading
+            ordersList.style.display = 'none';
+            document.getElementById('loadingState').style.display = 'flex';
+
+            setTimeout(() => {
+                document.getElementById('loadingState').style.display = 'none';
+                ordersList.style.display = 'flex';
+            }, 500);
+        });
+    </script>
+</body>
+</html>

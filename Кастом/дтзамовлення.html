@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoostGram - Замовлення #125847</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .background {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #000 0%, #1a0033 50%, #000 100%);
+            z-index: -2;
+        }
+
+        .floating-orbs {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .orb1 {
+            width: 400px;
+            height: 400px;
+            background: #6b46c1;
+            top: -200px;
+            left: -200px;
+            animation-delay: 0s;
+        }
+
+        .orb2 {
+            width: 300px;
+            height: 300px;
+            background: #9333ea;
+            bottom: -150px;
+            right: -150px;
+            animation-delay: 5s;
+        }
+
+        .orb3 {
+            width: 250px;
+            height: 250px;
+            background: #7c3aed;
+            top: 50%;
+            left: 50%;
+            animation-delay: 10s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(50px, -50px) scale(1.1); }
+            50% { transform: translate(-50px, 50px) scale(0.9); }
+            75% { transform: translate(30px, 30px) scale(1.05); }
+        }
+
+        .container {
+            max-width: 430px;
+            margin: 0 auto;
+            padding: 20px;
+            padding-bottom: 100px;
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .back-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 20px;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.05);
+        }
+
+        .page-title {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a78bfa 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .share-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 20px;
+        }
+
+        .share-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.05);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 25px;
+            animation: slideUp 0.6s ease-out 0.1s both;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(168, 85, 247, 0.1), transparent);
+            transform: rotate(45deg);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) rotate(45deg); }
+        }
+
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-info {
+            flex: 1;
+        }
+
+        .status-label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+        }
+
+        .status-value {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .progress-section {
+            position: relative;
+            z-index: 1;
+        }
+
+        .main-progress {
+            margin-bottom: 24px;
+        }
+
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            height: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #7c3aed 0%, #a855f7 100%);
+            border-radius: 12px;
+            transition: width 0.5s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        .progress-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .detailed-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            animation: slideUp 0.6s ease-out 0.2s both;
+        }
+
+        .info-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 500;
+            text-align: right;
+        }
+
+        .link-value {
+            color: #a855f7;
+            text-decoration: none;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+        }
+
+        .link-value:hover {
+            text-decoration: underline;
+        }
+
+        .chart-container {
+            height: 200px;
+            margin-top: 20px;
+            position: relative;
+            animation: slideUp 0.6s ease-out 0.3s both;
+        }
+
+        .chart-placeholder {
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 150px;
+            width: 100%;
+            padding: 0 20px;
+        }
+
+        .chart-bar {
+            width: 20px;
+            background: linear-gradient(180deg, #a855f7 0%, #7c3aed 100%);
+            border-radius: 4px 4px 0 0;
+            transition: height 0.5s ease;
+            opacity: 0.8;
+        }
+
+        .timeline-section {
+            margin-bottom: 20px;
+            animation: slideUp 0.6s ease-out 0.4s both;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 16px;
+            padding: 16px 0;
+            position: relative;
+        }
+
+        .timeline-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 20px;
+            top: 48px;
+            bottom: -16px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .timeline-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .timeline-icon.active {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .timeline-icon.completed {
+            background: rgba(34, 197, 94, 0.2);
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .timeline-description {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 4px;
+        }
+
+        .timeline-time {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+            animation: slideUp 0.6s ease-out 0.5s both;
+        }
+
+        .action-btn {
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            border: none;
+        }
+
+        .action-btn.primary:hover {
+            box-shadow: 0 10px 30px rgba(168, 85, 247, 0.4);
+        }
+
+        .action-btn.danger {
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .action-btn.danger:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            max-width: 430px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-around;
+            padding: 0 20px;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 12px;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-item.active {
+            background: rgba(124, 58, 237, 0.2);
+        }
+
+        .nav-icon {
+            font-size: 24px;
+        }
+
+        .nav-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .refresh-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            opacity: 0.5;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .success-banner {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideDown 0.5s ease-out;
+        }
+
+        .success-banner-icon {
+            font-size: 24px;
+        }
+
+        .success-banner-content {
+            flex: 1;
+        }
+
+        .success-banner-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .success-banner-text {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="background"></div>
+    <div class="floating-orbs">
+        <div class="orb orb1"></div>
+        <div class="orb orb2"></div>
+        <div class="orb orb3"></div>
+    </div>
+
+    <div class="container">
+        <header class="header">
+            <div class="back-btn" onclick="goBack()">←</div>
+            <h1 class="page-title">Замовлення #125847</h1>
+            <div class="share-btn" onclick="shareOrder()">📤</div>
+        </header>
+
+        <!-- Main Status Card -->
+        <div class="status-card">
+            <div class="status-header">
+                <div class="status-info">
+                    <div class="status-label">Статус замовлення</div>
+                    <div class="status-value">
+                        <span>Активне</span>
+                        <span class="status-badge">
+                            <span>🔵</span>
+                            <span>В процесі</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="refresh-indicator">🔄</div>
+            </div>
+
+            <div class="progress-section">
+                <div class="main-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 65%" id="mainProgress"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <span>Виконано: 3,241 з 5,000</span>
+                        <span>65%</span>
+                    </div>
+                </div>
+
+                <div class="detailed-stats">
+                    <div class="stat-box">
+                        <div class="stat-icon">⚡</div>
+                        <div class="stat-value">~500/год</div>
+                        <div class="stat-label">Швидкість</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-icon">⏱</div>
+                        <div class="stat-value">~3 год</div>
+                        <div class="stat-label">До завершення</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-icon">📈</div>
+                        <div class="stat-value">98%</div>
+                        <div class="stat-label">Якість</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-value">₴300</div>
+                        <div class="stat-label">Вартість</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Information -->
+        <div class="info-card">
+            <h2 class="info-title">
+                <span>📋</span>
+                <span>Інформація про замовлення</span>
+            </h2>
+            <div class="info-row">
+                <span class="info-label">Послуга</span>
+                <span class="info-value">👥 Підписники UA | R30</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Посилання</span>
+                <a href="#" class="info-value link-value">t.me/my_awesome_channel</a>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Кількість</span>
+                <span class="info-value">5,000</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Дата створення</span>
+                <span class="info-value">31.07.2025, 14:23</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Гарантія</span>
+                <span class="info-value">30 днів</span>
+            </div>
+        </div>
+
+        <!-- Progress Chart -->
+        <div class="info-card">
+            <h2 class="info-title">
+                <span>📊</span>
+                <span>Графік виконання</span>
+            </h2>
+            <div class="chart-container">
+                <div class="chart-placeholder">
+                    <div class="chart-bars">
+                        <div class="chart-bar" style="height: 20%"></div>
+                        <div class="chart-bar" style="height: 35%"></div>
+                        <div class="chart-bar" style="height: 50%"></div>
+                        <div class="chart-bar" style="height: 65%"></div>
+                        <div class="chart-bar" style="height: 75%"></div>
+                        <div class="chart-bar" style="height: 85%"></div>
+                        <div class="chart-bar" style="height: 90%"></div>
+                        <div class="chart-bar" style="height: 65%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="info-card timeline-section">
+            <h2 class="info-title">
+                <span>🕐</span>
+                <span>Історія змін</span>
+            </h2>
+
+            <div class="timeline-item">
+                <div class="timeline-icon active">⚡</div>
+                <div class="timeline-content">
+                    <div class="timeline-title">Обробка замовлення</div>
+                    <div class="timeline-description">Досягнуто 65% виконання</div>
+                    <div class="timeline-time">Зараз</div>
+                </div>
+            </div>
+
+            <div class="timeline-item">
+                <div class="timeline-icon completed">✓</div>
+                <div class="timeline-content">
+                    <div class="timeline-title">Початок виконання</div>
+                    <div class="timeline-description">Розпочато додавання підписників</div>
+                    <div class="timeline-time">2 години тому</div>
+                </div>
+            </div>
+
+            <div class="timeline-item">
+                <div class="timeline-icon completed">✓</div>
+                <div class="timeline-content">
+                    <div class="timeline-title">Замовлення підтверджено</div>
+                    <div class="timeline-description">Оплата отримана, замовлення в черзі</div>
+                    <div class="timeline-time">3 години тому</div>
+                </div>
+            </div>
+
+            <div class="timeline-item">
+                <div class="timeline-icon completed">✓</div>
+                <div class="timeline-content">
+                    <div class="timeline-title">Замовлення створено</div>
+                    <div class="timeline-description">ID: #125847</div>
+                    <div class="timeline-time">31.07.2025, 14:23</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="action-btn" onclick="pauseOrder()">
+                <span>⏸</span>
+                <span>Призупинити</span>
+            </button>
+            <button class="action-btn primary" onclick="repeatOrder()">
+                <span>🔄</span>
+                <span>Повторити</span>
+            </button>
+            <button class="action-btn" onclick="downloadReport()">
+                <span>📄</span>
+                <span>Завантажити звіт</span>
+            </button>
+            <button class="action-btn danger" onclick="cancelOrder()">
+                <span>❌</span>
+                <span>Скасувати</span>
+            </button>
+        </div>
+
+        <!-- Success Banner (hidden by default) -->
+        <div class="success-banner" id="successBanner" style="display: none;">
+            <div class="success-banner-icon">✅</div>
+            <div class="success-banner-content">
+                <div class="success-banner-title">Замовлення виконано!</div>
+                <div class="success-banner-text">Всі 5,000 підписників успішно додані</div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="nav-bar">
+        <div class="nav-container">
+            <div class="nav-item">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Головна</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">📦</span>
+                <span class="nav-label">Послуги</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">💳</span>
+                <span class="nav-label">Баланс</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">👤</span>
+                <span class="nav-label">Профіль</span>
+            </div>
+        </div>
+    </nav>
+
+    <script>
+        // Simulate real-time progress updates
+        let currentProgress = 65;
+        let isActive = true;
+
+        function updateProgress() {
+            if (!isActive) return;
+
+            const progressFill = document.getElementById('mainProgress');
+            const progressStats = document.querySelector('.progress-stats');
+            const statBoxes = document.querySelectorAll('.stat-value');
+
+            if (currentProgress < 100) {
+                currentProgress += Math.random() * 2;
+                currentProgress = Math.min(currentProgress, 100);
+
+                const completed = Math.round(currentProgress * 50);
+
+                progressFill.style.width = currentProgress + '%';
+                progressStats.innerHTML = `
+                    <span>Виконано: ${completed.toLocaleString()} з 5,000</span>
+                    <span>${Math.round(currentProgress)}%</span>
+                `;
+
+                // Update time remaining
+                const hoursLeft = Math.max(0, Math.round((100 - currentProgress) / 20));
+                statBoxes[1].textContent = hoursLeft > 0 ? `~${hoursLeft} год` : 'Завершується...';
+
+                // Check if completed
+                if (currentProgress >= 100) {
+                    completeOrder();
+                }
+            }
+        }
+
+        function completeOrder() {
+            isActive = false;
+            document.querySelector('.status-badge').innerHTML = `
+                <span>✅</span>
+                <span>Виконано</span>
+            `;
+            document.querySelector('.status-badge').style.background = 'rgba(34, 197, 94, 0.2)';
+            document.querySelector('.status-badge').style.color = '#22c55e';
+            document.querySelector('.refresh-indicator').style.display = 'none';
+
+            // Show success banner
+            document.getElementById('successBanner').style.display = 'flex';
+
+            // Update timeline
+            const timeline = document.querySelector('.timeline-section');
+            const newTimelineItem = document.createElement('div');
+            newTimelineItem.className = 'timeline-item';
+            newTimelineItem.innerHTML = `
+                <div class="timeline-icon completed">✅</div>
+                <div class="timeline-content">
+                    <div class="timeline-title">Замовлення виконано</div>
+                    <div class="timeline-description">Всі підписники успішно додані</div>
+                    <div class="timeline-time">Щойно</div>
+                </div>
+            `;
+            timeline.querySelector('.info-title').after(newTimelineItem);
+        }
+
+        // Update progress every 3 seconds
+        setInterval(updateProgress, 3000);
+
+        // Update chart animation
+        function animateChart() {
+            const bars = document.querySelectorAll('.chart-bar');
+            bars.forEach((bar, index) => {
+                setTimeout(() => {
+                    const randomHeight = 20 + Math.random() * 70;
+                    bar.style.height = randomHeight + '%';
+                }, index * 100);
+            });
+        }
+
+        // Animate chart every 5 seconds
+        setInterval(animateChart, 5000);
+
+        // Initial chart animation
+        setTimeout(animateChart, 500);
+
+        // Action handlers
+        function goBack() {
+            window.history.back();
+        }
+
+        function shareOrder() {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Замовлення #125847',
+                    text: 'Статус замовлення: Активне (65%)',
+                    url: window.location.href
+                });
+            } else {
+                alert('Посилання скопійовано!');
+            }
+        }
+
+        function pauseOrder() {
+            if (confirm('Призупинити виконання замовлення?')) {
+                isActive = false;
+                document.querySelector('.status-badge').innerHTML = `
+                    <span>⏸</span>
+                    <span>Призупинено</span>
+                `;
+                document.querySelector('.status-badge').style.background = 'rgba(245, 158, 11, 0.2)';
+                document.querySelector('.status-badge').style.color = '#f59e0b';
+                alert('Замовлення призупинено');
+            }
+        }
+
+        function repeatOrder() {
+            if (confirm('Створити нове замовлення з такими ж параметрами?')) {
+                alert('Нове замовлення створено!');
+            }
+        }
+
+        function downloadReport() {
+            alert('Завантаження звіту...');
+        }
+
+        function cancelOrder() {
+            if (confirm('Ви впевнені? Скасування замовлення неможливо відмінити!')) {
+                if (confirm('Це останнє попередження. Скасувати замовлення?')) {
+                    isActive = false;
+                    alert('Замовлення скасовано. Кошти будуть повернені протягом 24 годин.');
+                    window.history.back();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
