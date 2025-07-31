@@ -1,5 +1,4 @@
-📊 Налаштування бази даних Supabase
-Тепер потрібно створити таблиці в Supabase. Ось SQL скрипти для створення всіх необхідних таблиць:
+📊 ОНОВЛЕНА ДОКУМЕНТАЦІЯ БАЗИ ДАНИХ SUPABASE
 1️⃣ Таблиця користувачів (users)
 sql-- Створення таблиці users
 CREATE TABLE users (
@@ -80,10 +79,10 @@ CREATE TABLE transactions (
 CREATE INDEX idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX idx_transactions_type ON transactions(type);
 CREATE INDEX idx_transactions_created_at ON transactions(created_at DESC);
-4️⃣ Таблиця сервісів (services)
+4️⃣ Таблиця сервісів (services) - ОНОВЛЕНА
 sql-- Таблиця сервісів Nakrutochka
 CREATE TABLE services (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY,  -- Nakrutochka service ID
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     category TEXT NOT NULL,
@@ -91,7 +90,13 @@ CREATE TABLE services (
     min INTEGER NOT NULL,
     max INTEGER NOT NULL,
     dripfeed BOOLEAN DEFAULT false,
+    refill BOOLEAN DEFAULT false,
+    cancel BOOLEAN DEFAULT false,
     description TEXT,
+    position INTEGER DEFAULT 999,
+    tags TEXT[] DEFAULT '{}',
+    metadata JSONB DEFAULT '{}',
+    status TEXT DEFAULT 'active',
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -100,6 +105,7 @@ CREATE TABLE services (
 CREATE INDEX idx_services_category ON services(category);
 CREATE INDEX idx_services_type ON services(type);
 CREATE INDEX idx_services_active ON services(is_active);
+CREATE INDEX idx_services_position ON services(position);
 5️⃣ Таблиця замовлень (orders)
 sql-- Таблиця замовлень
 CREATE TABLE orders (
@@ -146,7 +152,34 @@ CREATE INDEX idx_payments_user_id ON payments(user_id);
 CREATE INDEX idx_payments_payment_id ON payments(payment_id);
 CREATE INDEX idx_payments_status ON payments(status);
 CREATE INDEX idx_payments_created_at ON payments(created_at DESC);
-7️⃣ RPC функції для атомарних операцій
+7️⃣ Таблиця рефералів (referrals) - НОВА
+sql-- Таблиця рефералів
+CREATE TABLE referrals (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    referrer_id UUID NOT NULL REFERENCES users(id),
+    referred_id UUID NOT NULL REFERENCES users(id),
+    bonus_paid BOOLEAN DEFAULT false,
+    bonus_amount DECIMAL(15,2) DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_referrals_referrer ON referrals(referrer_id);
+CREATE INDEX idx_referrals_referred ON referrals(referred_id);
+CREATE UNIQUE INDEX idx_referrals_unique ON referrals(referrer_id, referred_id);
+8️⃣ Таблиця статистики бота (bot_stats) - НОВА
+sql-- Таблиця статистики бота
+CREATE TABLE bot_stats (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_count INTEGER DEFAULT 0,
+    order_count INTEGER DEFAULT 0, 
+    total_revenue DECIMAL(15,2) DEFAULT 0,
+    date DATE UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_bot_stats_date ON bot_stats(date);
+9️⃣ RPC функції для атомарних операцій
 sql-- Функція для оновлення балансу (атомарна операція)
 CREATE OR REPLACE FUNCTION increment_balance(
     user_id UUID,
@@ -190,7 +223,7 @@ BEGIN
     RETURN increment_balance(user_id, -amount);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-8️⃣ Тригери для автоматичного оновлення updated_at
+🔟 Тригери для автоматичного оновлення updated_at
 sql-- Функція для оновлення updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -212,3 +245,39 @@ CREATE TRIGGER update_payments_updated_at BEFORE UPDATE ON payments
 
 CREATE TRIGGER update_services_updated_at BEFORE UPDATE ON services
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_bot_stats_updated_at BEFORE UPDATE ON bot_stats
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+📋 ЗМІНИ ВІДНОСНО ПОПЕРЕДНЬОЇ ВЕРСІЇ:
+✅ Змінено в таблиці services:
+
+id INTEGER PRIMARY KEY - тепер використовує Nakrutochka ID напряму
+Видалено поле service_id - більше не потрібне
+Додано нові поля:
+
+refill BOOLEAN DEFAULT false
+cancel BOOLEAN DEFAULT false
+position INTEGER DEFAULT 999
+tags TEXT[] DEFAULT '{}'
+metadata JSONB DEFAULT '{}'
+status TEXT DEFAULT 'active'
+
+
+
+✅ Додано нові таблиці:
+
+referrals - для відстеження реферальних зв'язків
+bot_stats - для збору статистики бота
+
+✅ Додано індекси:
+
+idx_services_position - для сортування сервісів
+idx_referrals_unique - унікальний індекс для запобігання дублікатів
+
+🎯 ВАЖЛИВІ ПРИМІТКИ:
+
+Таблиця services тепер використовує Nakrutochka service ID як primary key
+Реферальна система тепер має окрему таблицю для кращого трекінгу
+Статистика бота збирається по днях для аналітики
+Всі таблиці мають автоматичне оновлення updated_at через тригери
+Додано більше індексів для оптимізації запитів
