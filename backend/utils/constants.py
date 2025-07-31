@@ -98,10 +98,10 @@ class SERVICE_TYPE:
     SUBSCRIPTION = 'subscription'
 
 
-# Референтні винагороди
+# Референтні винагороди - ОНОВЛЕНО для дворівневої системи
 REFERRAL_LEVELS = {
-    1: 0.10,  # 10% для прямого реферала
-    2: 0.05,  # 5% для реферала другого рівня (якщо потрібно)
+    1: 0.07,   # 7% для прямого реферала
+    2: 0.025,  # 2.5% для реферала другого рівня
 }
 
 # Ліміти
@@ -112,7 +112,7 @@ LIMITS = {
     'MAX_WITHDRAW': 50000,
     'MIN_ORDER': 10,
     'MAX_ORDER': 100000,
-    'MAX_REFERRAL_LEVELS': 1,  # Тільки один рівень рефералів
+    'MAX_REFERRAL_LEVELS': 2,  # Два рівні рефералів
     'MAX_COMMENT_LENGTH': 1000,  # Максимальна довжина коментаря
     'MAX_COMMENTS_PER_ORDER': 10000,  # Максимум коментарів в замовленні
     'MAX_ACTIVE_ORDERS': 50,  # Максимум активних замовлень на користувача
@@ -353,12 +353,13 @@ DRIP_FEED_INTERVALS = {
     '24h': 1440,  # 24 години
 }
 
-# Default values
+# Default values - ОНОВЛЕНО
 DEFAULTS = {
     'LANGUAGE': 'uk',
     'CURRENCY': 'USD',
     'PAGE_SIZE': 20,
     'ORDER_PRIORITY': 'normal',
     'DRIP_FEED_INTERVAL': '1h',
-    'REFERRAL_BONUS': 10.0,  # відсотки
+    'REFERRAL_BONUS': 7.0,  # 7% для першого рівня
+    'REFERRAL_BONUS_LEVEL2': 2.5,  # 2.5% для другого рівня
 }

@@ -255,10 +255,93 @@ class SupabaseClient:
             logger.error(f"Error upserting service: {e}")
             return None
 
-    # === Referral Methods ===
+    # === NEW Referral Methods для дворівневої системи ===
+
+    def create_referral(self, referrer_id: str, referred_id: str, level: int = 1) -> Optional[Dict]:
+        """
+        Створити реферальний зв'язок
+
+        Args:
+            referrer_id: ID реферера
+            referred_id: ID реферала
+            level: Рівень реферала (1 або 2)
+        """
+        try:
+            referral_data = {
+                'referrer_id': referrer_id,
+                'referred_id': referred_id,
+                'level': level,
+                'bonus_paid': False,
+                'bonus_amount': 0,
+                'is_active': True,
+                'created_at': datetime.utcnow().isoformat()
+            }
+
+            result = self.table('referrals').insert(referral_data).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Error creating referral: {e}")
+            return None
+
+    def get_referrals_by_level(self, referrer_id: str, level: int) -> List[Dict]:
+        """
+        Отримати рефералів певного рівня
+
+        Args:
+            referrer_id: ID реферера
+            level: Рівень (1 або 2)
+        """
+        try:
+            result = self.table('referrals') \
+                .select(
+                '*, referred_user:users!referred_id(id, telegram_id, username, first_name, last_name, balance, created_at)') \
+                .eq('referrer_id', referrer_id) \
+                .eq('level', level) \
+                .eq('is_active', True) \
+                .order('created_at', desc=True) \
+                .execute()
+
+            return result.data or []
+        except Exception as e:
+            logger.error(f"Error getting referrals by level: {e}")
+            return []
+
+    def update_referral_stats(self, referral_id: str, deposit_amount: float, bonus_amount: float) -> bool:
+        """
+        Оновити статистику реферала після депозиту
+
+        Args:
+            referral_id: ID запису в таблиці referrals
+            deposit_amount: Сума депозиту
+            bonus_amount: Сума нарахованого бонусу
+        """
+        try:
+            # Оновлюємо статистику
+            update_data = {
+                'total_deposits': self.client.rpc('increment_value', {
+                    'table_name': 'referrals',
+                    'column_name': 'total_deposits',
+                    'row_id': referral_id,
+                    'increment_by': deposit_amount
+                }),
+                'total_bonuses_generated': self.client.rpc('increment_value', {
+                    'table_name': 'referrals',
+                    'column_name': 'total_bonuses_generated',
+                    'row_id': referral_id,
+                    'increment_by': bonus_amount
+                }),
+                'last_deposit_at': datetime.utcnow().isoformat(),
+                'bonus_paid': True
+            }
+
+            result = self.table('referrals').update(update_data).eq('id', referral_id).execute()
+            return bool(result.data)
+        except Exception as e:
+            logger.error(f"Error updating referral stats: {e}")
+            return False
 
     def get_user_referrals(self, user_id: str) -> List[Dict]:
-        """Отримати рефералів користувача"""
+        """Отримати рефералів користувача (старий метод для сумісності)"""
         try:
             result = self.table('users') \
                 .select('id, telegram_id, username, first_name, created_at') \
@@ -271,7 +354,7 @@ class SupabaseClient:
             return []
 
     def get_referral_stats(self, user_id: str) -> Dict:
-        """Отримати статистику рефералів"""
+        """Отримати статистику рефералів (старий метод для сумісності)"""
         try:
             # Кількість рефералів
             referrals = self.get_user_referrals(user_id)
@@ -293,6 +376,59 @@ class SupabaseClient:
         except Exception as e:
             logger.error(f"Error getting referral stats for user {user_id}: {e}")
             return {'count': 0, 'total_earned': 0, 'referrals': []}
+
+    def get_referral_by_users(self, referrer_id: str, referred_id: str) -> Optional[Dict]:
+        """
+        Отримати реферальний зв'язок між двома користувачами
+
+        Args:
+            referrer_id: ID реферера
+            referred_id: ID реферала
+        """
+        try:
+            result = self.table('referrals') \
+                .select('*') \
+                .eq('referrer_id', referrer_id) \
+                .eq('referred_id', referred_id) \
+                .single() \
+                .execute()
+
+            return result.data
+        except Exception as e:
+            logger.error(f"Error getting referral by users: {e}")
+            return None
+
+    def get_referral_chain(self, user_id: str) -> Dict[str, List[Dict]]:
+        """
+        Отримати повний ланцюг рефералів (2 рівні)
+
+        Args:
+            user_id: ID користувача
+
+        Returns:
+            Словник з рефералами по рівнях
+        """
+        try:
+            # Рефералі першого рівня
+            level1 = self.get_referrals_by_level(user_id, 1)
+
+            # Рефералі другого рівня (рефералі рефералів)
+            level2 = []
+            for ref in level1:
+                sub_refs = self.get_referrals_by_level(ref['referred_id'], 1)
+                # Додаємо як рефералів 2го рівня основного користувача
+                for sub_ref in sub_refs:
+                    sub_ref['level'] = 2
+                    sub_ref['referrer_id'] = user_id
+                    level2.append(sub_ref)
+
+            return {
+                'level1': level1,
+                'level2': level2
+            }
+        except Exception as e:
+            logger.error(f"Error getting referral chain: {e}")
+            return {'level1': [], 'level2': []}
 
     # === Helper Methods ===
 

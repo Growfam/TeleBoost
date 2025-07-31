@@ -95,6 +95,48 @@ def register_blueprints(app):
     app.register_blueprint(api_bp)
     logger.info("✅ API blueprint registered")
 
+    # Referrals routes - НОВІ
+    try:
+        from backend.referrals.routes import referrals_bp
+        app.register_blueprint(referrals_bp)
+        logger.info("✅ Referrals blueprint registered")
+    except ImportError:
+        logger.warning("⚠️ Referrals module not found, using stub endpoints")
+        # Створюємо заглушки якщо модуль ще не створено
+        from flask import Blueprint
+        referrals_bp = Blueprint('referrals', __name__, url_prefix='/api/referrals')
+
+        @referrals_bp.route('/stats')
+        @app.middleware['auth'].require_auth
+        def referral_stats():
+            stats = supabase.get_referral_stats(g.current_user.id)
+            return jsonify({
+                'success': True,
+                'data': stats
+            })
+
+        @referrals_bp.route('/link')
+        @app.middleware['auth'].require_auth
+        def referral_link():
+            bot_url = f"https://t.me/{config.BOT_USERNAME.replace('@', '')}"
+            ref_link = f"{bot_url}?start=ref_{g.current_user.referral_code}"
+
+            return jsonify({
+                'success': True,
+                'data': {
+                    'link': ref_link,
+                    'code': g.current_user.referral_code,
+                    'earnings': g.current_user.referral_earnings,
+                    'rates': {
+                        'level1': config.REFERRAL_BONUS_PERCENT,
+                        'level2': config.REFERRAL_BONUS_LEVEL2_PERCENT
+                    }
+                }
+            })
+
+        app.register_blueprint(referrals_bp)
+        logger.info("✅ Referrals blueprint registered (stub)")
+
     # Створюємо тимчасові заглушки для інших blueprints
     from flask import Blueprint
 
@@ -190,38 +232,6 @@ def register_blueprints(app):
     app.register_blueprint(payments_bp)
     logger.info("✅ Payments blueprint registered")
 
-    # === Referrals Blueprint ===
-    referrals_bp = Blueprint('referrals', __name__, url_prefix='/api/referrals')
-
-    @referrals_bp.route('/stats')
-    @app.middleware['auth'].require_auth
-    def referral_stats():
-        stats = supabase.get_referral_stats(g.current_user.id)
-
-        return jsonify({
-            'success': True,
-            'data': stats
-        })
-
-    @referrals_bp.route('/link')
-    @app.middleware['auth'].require_auth
-    def referral_link():
-        bot_url = f"https://t.me/{config.BOT_USERNAME}"
-        ref_link = f"{bot_url}?start=ref_{g.current_user.referral_code}"
-
-        return jsonify({
-            'success': True,
-            'data': {
-                'link': ref_link,
-                'code': g.current_user.referral_code,
-                'earnings': g.current_user.referral_earnings,
-                'bonus_percent': config.REFERRAL_BONUS_PERCENT
-            }
-        })
-
-    app.register_blueprint(referrals_bp)
-    logger.info("✅ Referrals blueprint registered")
-
     # === Statistics Blueprint ===
     statistics_bp = Blueprint('statistics', __name__, url_prefix='/api/statistics')
 
@@ -290,7 +300,11 @@ def register_base_routes(app):
                 },
                 'referrals': {
                     'stats': 'GET /api/referrals/stats',
-                    'link': 'GET /api/referrals/link'
+                    'link': 'GET /api/referrals/link',
+                    'list': 'GET /api/referrals/list',
+                    'tree': 'GET /api/referrals/tree',
+                    'earnings': 'GET /api/referrals/earnings',
+                    'promo': 'GET /api/referrals/promo-materials'
                 },
                 'api': {
                     'health': 'GET /api/health',
@@ -405,6 +419,14 @@ def register_base_routes(app):
                         'rate_limiting': True
                     }
                 },
+                'referral_system': {
+                    'enabled': True,
+                    'levels': 2,
+                    'rates': {
+                        'level1': config.REFERRAL_BONUS_PERCENT,
+                        'level2': config.REFERRAL_BONUS_LEVEL2_PERCENT
+                    }
+                },
                 'middleware': middleware_stats
             }
         })
@@ -476,6 +498,7 @@ def init_services():
         logger.info(f"Database: {'✅ Connected' if supabase.test_connection() else '❌ Not connected'}")
         logger.info(f"Redis: {'✅ Connected' if redis_client and redis_client.ping() else '⚠️ Not available'}")
         logger.info(f"Middleware: ✅ All systems initialized")
+        logger.info(f"Referral System: ✅ Two-level (L1: {config.REFERRAL_BONUS_PERCENT}%, L2: {config.REFERRAL_BONUS_LEVEL2_PERCENT}%)")
         logger.info("=" * 50)
 
     except Exception as e:
@@ -514,6 +537,7 @@ if __name__ == '__main__':
         logger.info(f"   - Auth: ✅ JWT + Telegram Web App")
         logger.info(f"   - Cache: ✅ Redis caching enabled")
         logger.info(f"   - Performance: ✅ Monitoring active")
+        logger.info(f"   - Referrals: ✅ Two-level system (7% + 2.5%)")
         logger.info("=" * 50)
 
         # Запуск Flask сервера

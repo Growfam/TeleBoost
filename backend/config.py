@@ -50,7 +50,7 @@ class Config:
 
     # Telegram Bot
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-    BOT_USERNAME = os.getenv('BOT_USERNAME', 'TeleBoostBot')
+    BOT_USERNAME = os.getenv('BOT_USERNAME', 'TeleeBoost_bot')
     TELEGRAM_WEBHOOK_PATH = '/api/telegram/webhook'
     TELEGRAM_WEBHOOK_SECRET = os.getenv('TELEGRAM_WEBHOOK_SECRET', SECRET_KEY)
 
@@ -110,9 +110,10 @@ class Config:
         'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     }
 
-    # Business Logic
-    REFERRAL_BONUS_PERCENT = 10.0  # 10% для реферера
-    REFERRAL_USER_BONUS = 5.0  # 5% для нового користувача
+    # Business Logic - Two-level referral system
+    REFERRAL_BONUS_PERCENT = 7.0  # 7% для першого рівня
+    REFERRAL_BONUS_LEVEL2_PERCENT = 2.5  # 2.5% для другого рівня
+    REFERRAL_USER_BONUS = 0.0  # Бонус для нового користувача (вимкнено)
     MIN_DEPOSIT = 100  # Мінімальний депозит в UAH
     MAX_DEPOSIT = 100000  # Максимальний депозит в UAH
     MIN_WITHDRAW = 500  # Мінімальне виведення в UAH
@@ -181,6 +182,7 @@ class Config:
         'SUBSCRIPTIONS_ENABLED': False,
         'ANALYTICS_ENABLED': True,
         'MAINTENANCE_MODE': False,
+        'TWO_LEVEL_REFERRALS': True,  # Дворівнева реферальна система
     }
 
     # Email Settings (for future use)
@@ -246,6 +248,7 @@ class Config:
             'FRONTEND_URL': cls.FRONTEND_URL,
             'BOT_USERNAME': cls.BOT_USERNAME,
             'REFERRAL_BONUS_PERCENT': cls.REFERRAL_BONUS_PERCENT,
+            'REFERRAL_BONUS_LEVEL2_PERCENT': cls.REFERRAL_BONUS_LEVEL2_PERCENT,
             'REFERRAL_USER_BONUS': cls.REFERRAL_USER_BONUS,
             'MIN_DEPOSIT': cls.MIN_DEPOSIT,
             'MAX_DEPOSIT': cls.MAX_DEPOSIT,
