@@ -4,7 +4,7 @@ TeleBoost Validators
 Функції для валідації даних
 """
 import re
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any, Tuple
 from urllib.parse import urlparse
 
 from backend.utils.constants import (
@@ -147,7 +147,7 @@ def validate_amount(amount: Union[int, float],
 
 
 def validate_payment_amount(amount: Union[int, float],
-                            operation: str = 'deposit') -> tuple[bool, Optional[str]]:
+                            operation: str = 'deposit') -> Tuple[bool, Optional[str]]:
     """
     Валідація суми платежу з урахуванням лімітів
 
@@ -178,7 +178,7 @@ def validate_payment_amount(amount: Union[int, float],
     return True, None
 
 
-def validate_order_amount(amount: Union[int, float]) -> tuple[bool, Optional[str]]:
+def validate_order_amount(amount: Union[int, float]) -> Tuple[bool, Optional[str]]:
     """
     Валідація суми замовлення
 
@@ -230,7 +230,7 @@ def validate_quantity(quantity: Union[int, str],
         return False
 
 
-def validate_service_params(params: Dict[str, Any], service_type: str) -> tuple[bool, Optional[str]]:
+def validate_service_params(params: Dict[str, Any], service_type: str) -> Tuple[bool, Optional[str]]:
     """
     Валідація параметрів сервісу
 
@@ -282,7 +282,7 @@ def validate_service_params(params: Dict[str, Any], service_type: str) -> tuple[
     return True, None
 
 
-def validate_order_data(data: Dict[str, Any]) -> tuple[bool, List[str]]:
+def validate_order_data(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """
     Повна валідація даних замовлення
 
@@ -418,3 +418,174 @@ def is_valid_uuid(uuid_string: str) -> bool:
         re.IGNORECASE
     )
     return bool(uuid_pattern.match(uuid_string))
+
+
+def validate_crypto_address(address: str, network: str) -> bool:
+    """
+    Валідація криптовалютної адреси
+
+    Args:
+        address: Адреса гаманця
+        network: Мережа (TRC20, BEP20, ERC20, etc.)
+
+    Returns:
+        True якщо адреса валідна для вказаної мережі
+    """
+    if not address or not network:
+        return False
+
+    # Видаляємо пробіли
+    address = address.strip()
+
+    # Валідація по мережах
+    if network.upper() == 'TRC20':
+        # TRON адреси починаються з T і мають 34 символи
+        return bool(re.match(r'^T[a-zA-Z0-9]{33}$', address))
+
+    elif network.upper() in ['BEP20', 'ERC20']:
+        # Ethereum/BSC адреси починаються з 0x і мають 42 символи
+        return bool(re.match(r'^0x[a-fA-F0-9]{40}$', address))
+
+    elif network.upper() == 'SOL':
+        # Solana адреси - base58, довжина 32-44 символи
+        return bool(re.match(r'^[1-9A-HJ-NP-Za-km-z]{32,44}$', address))
+
+    elif network.upper() == 'TON':
+        # TON адреси різних форматів
+        # Raw: 0:... або -1:... (workchain:hash)
+        # User-friendly: 48 символів base64url
+        if ':' in address:
+            return bool(re.match(r'^-?[0-9]:[a-fA-F0-9]{64}$', address))
+        else:
+            return bool(re.match(r'^[a-zA-Z0-9_-]{48}$', address))
+
+    elif network.upper() == 'BITCOIN':
+        # Bitcoin адреси різних типів
+        # Legacy (1...), SegWit (3...), Native SegWit (bc1...)
+        return bool(re.match(REGEX_PATTERNS['BTC_ADDRESS'], address))
+
+    else:
+        # Для невідомих мереж - базова перевірка
+        # Мінімум 20 символів, тільки алфавіт та цифри
+        return bool(re.match(r'^[a-zA-Z0-9]{20,}$', address))
+
+
+def validate_payment_currency(currency: str, provider: str) -> bool:
+    """
+    Валідація валюти для платіжного провайдера
+
+    Args:
+        currency: Код валюти (USDT, BTC, etc.)
+        provider: Платіжний провайдер (cryptobot, nowpayments)
+
+    Returns:
+        True якщо валюта підтримується провайдером
+    """
+    supported_currencies = {
+        'cryptobot': ['USDT', 'BTC', 'TON', 'ETH', 'BNB'],
+        'nowpayments': ['USDT', 'BTC', 'ETH', 'BNB', 'TRX', 'BUSD']
+    }
+
+    provider_currencies = supported_currencies.get(provider.lower(), [])
+    return currency.upper() in provider_currencies
+
+
+def validate_withdrawal_data(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """
+    Повна валідація даних для виведення коштів
+
+    Args:
+        data: Дані виведення
+
+    Returns:
+        (is_valid, list_of_errors)
+    """
+    errors = []
+
+    # Перевірка обов'язкових полів
+    required_fields = ['amount', 'address', 'network']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            errors.append(f'Поле {field} обов\'язкове')
+
+    # Валідація суми
+    if 'amount' in data:
+        try:
+            amount = float(data['amount'])
+            if amount <= 0:
+                errors.append('Сума має бути більше 0')
+            elif amount < LIMITS['MIN_WITHDRAW']:
+                errors.append(f'Мінімальна сума виведення: ${LIMITS["MIN_WITHDRAW"]}')
+            elif amount > LIMITS['MAX_WITHDRAW']:
+                errors.append(f'Максимальна сума виведення: ${LIMITS["MAX_WITHDRAW"]}')
+        except (ValueError, TypeError):
+            errors.append('Некоректна сума')
+
+    # Валідація адреси
+    if 'address' in data and 'network' in data:
+        if not validate_crypto_address(data['address'], data['network']):
+            errors.append(f'Некоректна адреса для мережі {data["network"]}')
+
+    return len(errors) == 0, errors
+
+
+def validate_network_for_currency(currency: str, network: str) -> bool:
+    """
+    Перевірка чи підтримується мережа для валюти
+
+    Args:
+        currency: Валюта (USDT, BTC, etc.)
+        network: Мережа (TRC20, BEP20, etc.)
+
+    Returns:
+        True якщо комбінація валідна
+    """
+    valid_combinations = {
+        'USDT': ['TRC20', 'BEP20', 'ERC20', 'SOL', 'TON'],
+        'BTC': ['Bitcoin'],
+        'ETH': ['Ethereum', 'ERC20'],
+        'BNB': ['BEP20', 'BSC'],
+        'TRX': ['Tron', 'TRC20'],
+        'TON': ['TON'],
+        'BUSD': ['BEP20', 'ERC20']
+    }
+
+    currency_networks = valid_combinations.get(currency.upper(), [])
+    return network.upper() in [n.upper() for n in currency_networks]
+
+
+def validate_payment_data(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """
+    Валідація даних платежу
+
+    Args:
+        data: Дані платежу
+
+    Returns:
+        (is_valid, list_of_errors)
+    """
+    errors = []
+
+    # Обов'язкові поля
+    required_fields = ['amount', 'currency', 'provider']
+    for field in required_fields:
+        if field not in data:
+            errors.append(f'{field} is required')
+
+    # Валідація суми
+    if 'amount' in data:
+        is_valid, error = validate_payment_amount(data['amount'], 'deposit')
+        if not is_valid:
+            errors.append(error)
+
+    # Валідація валюти
+    if 'currency' in data and 'provider' in data:
+        if not validate_payment_currency(data['currency'], data['provider']):
+            errors.append(f'Currency {data["currency"]} not supported by {data["provider"]}')
+
+    # Валідація мережі якщо є
+    if 'network' in data and 'currency' in data:
+        if not validate_network_for_currency(data['currency'], data['network']):
+            errors.append(f'Network {data["network"]} not supported for {data["currency"]}')
+
+    return len(errors) == 0, errors

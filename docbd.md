@@ -933,6 +933,369 @@ pg_dump -h db.supabase.co -U postgres -d postgres > backup.sql
 psql -h db.supabase.co -U postgres -d postgres < backup.sql
 ```
 
+-- supabase/functions/statistics_functions.sql
+-- SQL функції для статистики та аналітики
+
+-- Функція для розрахунку статистики користувача
+CREATE OR REPLACE FUNCTION calculate_user_stats(p_user_id UUID)
+RETURNS TABLE (
+    total_orders INTEGER,
+    successful_orders INTEGER,
+    failed_orders INTEGER,
+    average_order_value NUMERIC,
+    lifetime_value NUMERIC
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        COUNT(*)::INTEGER as total_orders,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END)::INTEGER as successful_orders,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END)::INTEGER as failed_orders,
+        COALESCE(AVG(charge), 0)::NUMERIC as average_order_value,
+        COALESCE(SUM(charge), 0)::NUMERIC as lifetime_value
+    FROM orders
+    WHERE user_id = p_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для отримання топ користувачів по витратах
+CREATE OR REPLACE FUNCTION get_top_spenders(limit_count INTEGER DEFAULT 10)
+RETURNS TABLE (
+    user_id UUID,
+    username VARCHAR,
+    total_spent NUMERIC,
+    orders_count INTEGER,
+    avg_order_value NUMERIC
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        u.id as user_id,
+        u.username,
+        COALESCE(SUM(o.charge), 0)::NUMERIC as total_spent,
+        COUNT(o.id)::INTEGER as orders_count,
+        COALESCE(AVG(o.charge), 0)::NUMERIC as avg_order_value
+    FROM users u
+    LEFT JOIN orders o ON u.id = o.user_id AND o.status = 'completed'
+    GROUP BY u.id, u.username
+    HAVING COUNT(o.id) > 0
+    ORDER BY total_spent DESC
+    LIMIT limit_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для отримання топ користувачів за період
+CREATE OR REPLACE FUNCTION get_top_spenders_for_period(
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
+    limit_count INTEGER DEFAULT 10
+)
+RETURNS TABLE (
+    user_id UUID,
+    username VARCHAR,
+    total_spent NUMERIC,
+    orders_count INTEGER
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        u.id as user_id,
+        u.username,
+        COALESCE(SUM(o.charge), 0)::NUMERIC as total_spent,
+        COUNT(o.id)::INTEGER as orders_count
+    FROM users u
+    INNER JOIN orders o ON u.id = o.user_id 
+    WHERE o.status = 'completed'
+        AND o.created_at >= start_date
+        AND o.created_at <= end_date
+    GROUP BY u.id, u.username
+    ORDER BY total_spent DESC
+    LIMIT limit_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для отримання топ сервісів
+CREATE OR REPLACE FUNCTION get_top_services(limit_count INTEGER DEFAULT 10)
+RETURNS TABLE (
+    service_id INTEGER,
+    service_name VARCHAR,
+    orders_count INTEGER,
+    total_revenue NUMERIC
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        o.service_id,
+        COALESCE(o.metadata->>'service_name', 'Unknown Service')::VARCHAR as service_name,
+        COUNT(*)::INTEGER as orders_count,
+        SUM(o.charge)::NUMERIC as total_revenue
+    FROM orders o
+    WHERE o.status = 'completed'
+    GROUP BY o.service_id, o.metadata->>'service_name'
+    ORDER BY total_revenue DESC
+    LIMIT limit_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для отримання топ сервісів за період
+CREATE OR REPLACE FUNCTION get_top_services_for_period(
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
+    limit_count INTEGER DEFAULT 10
+)
+RETURNS TABLE (
+    service_id INTEGER,
+    service_name VARCHAR,
+    orders_count INTEGER,
+    total_revenue NUMERIC
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        o.service_id,
+        COALESCE(o.metadata->>'service_name', 'Unknown Service')::VARCHAR as service_name,
+        COUNT(*)::INTEGER as orders_count,
+        SUM(o.charge)::NUMERIC as total_revenue
+    FROM orders o
+    WHERE o.status = 'completed'
+        AND o.created_at >= start_date
+        AND o.created_at <= end_date
+    GROUP BY o.service_id, o.metadata->>'service_name'
+    ORDER BY total_revenue DESC
+    LIMIT limit_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для отримання топ рефереров
+CREATE OR REPLACE FUNCTION get_top_referrers(limit_count INTEGER DEFAULT 10)
+RETURNS TABLE (
+    referrer_id UUID,
+    username VARCHAR,
+    referrals_count INTEGER,
+    total_earnings NUMERIC,
+    active_referrals INTEGER
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        u.id as referrer_id,
+        u.username,
+        COUNT(r.id)::INTEGER as referrals_count,
+        u.referral_earnings as total_earnings,
+        COUNT(CASE WHEN r.is_active THEN 1 END)::INTEGER as active_referrals
+    FROM users u
+    LEFT JOIN referrals r ON u.id = r.referrer_id
+    WHERE u.referral_earnings > 0
+    GROUP BY u.id, u.username, u.referral_earnings
+    ORDER BY u.referral_earnings DESC
+    LIMIT limit_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для розрахунку середньої вартості замовлення
+CREATE OR REPLACE FUNCTION calculate_average_order_value()
+RETURNS NUMERIC AS $$
+BEGIN
+    RETURN (
+        SELECT COALESCE(AVG(charge), 0)::NUMERIC
+        FROM orders
+        WHERE status = 'completed'
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для інкрементування значення в таблиці
+CREATE OR REPLACE FUNCTION increment_value(
+    table_name TEXT,
+    column_name TEXT,
+    row_id UUID,
+    increment_by NUMERIC
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    query TEXT;
+    result_count INTEGER;
+BEGIN
+    -- Безпечна побудова запиту з валідацією імен
+    IF table_name NOT IN ('users', 'referrals', 'orders') THEN
+        RAISE EXCEPTION 'Invalid table name';
+    END IF;
+    
+    IF column_name NOT IN ('balance', 'total_spent', 'total_deposits', 'total_bonuses_generated', 'referral_earnings') THEN
+        RAISE EXCEPTION 'Invalid column name';
+    END IF;
+    
+    -- Виконуємо оновлення
+    query := format(
+        'UPDATE %I SET %I = COALESCE(%I, 0) + $1 WHERE id = $2',
+        table_name,
+        column_name,
+        column_name
+    );
+    
+    EXECUTE query USING increment_by, row_id;
+    
+    GET DIAGNOSTICS result_count = ROW_COUNT;
+    
+    RETURN result_count > 0;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Функція для декрементування балансу (з перевіркою)
+CREATE OR REPLACE FUNCTION decrement_balance(
+    user_id UUID,
+    amount NUMERIC
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    current_balance NUMERIC;
+BEGIN
+    -- Отримуємо поточний баланс з блокуванням
+    SELECT balance INTO current_balance
+    FROM users
+    WHERE id = user_id
+    FOR UPDATE;
+    
+    -- Перевіряємо достатність коштів
+    IF current_balance IS NULL OR current_balance < amount THEN
+        RETURN FALSE;
+    END IF;
+    
+    -- Оновлюємо баланс
+    UPDATE users
+    SET balance = balance - amount
+    WHERE id = user_id;
+    
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для інкрементування балансу
+CREATE OR REPLACE FUNCTION increment_balance(
+    user_id UUID,
+    amount NUMERIC
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+    UPDATE users
+    SET balance = COALESCE(balance, 0) + amount
+    WHERE id = user_id;
+    
+    RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для обробки реферального бонусу в транзакції
+CREATE OR REPLACE FUNCTION process_referral_bonus(
+    p_referrer_id UUID,
+    p_amount NUMERIC,
+    p_referred_user_id UUID,
+    p_deposit_amount NUMERIC,
+    p_level INTEGER
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_current_balance NUMERIC;
+    v_transaction_id UUID;
+BEGIN
+    -- Починаємо транзакцію
+    -- Оновлюємо баланс реферера
+    UPDATE users
+    SET 
+        balance = COALESCE(balance, 0) + p_amount,
+        referral_earnings = COALESCE(referral_earnings, 0) + p_amount
+    WHERE id = p_referrer_id
+    RETURNING balance INTO v_current_balance;
+    
+    IF NOT FOUND THEN
+        RETURN FALSE;
+    END IF;
+    
+    -- Створюємо транзакцію
+    INSERT INTO transactions (
+        user_id,
+        type,
+        amount,
+        balance_before,
+        balance_after,
+        description,
+        metadata
+    ) VALUES (
+        p_referrer_id,
+        'referral_bonus',
+        p_amount,
+        v_current_balance - p_amount,
+        v_current_balance,
+        CASE 
+            WHEN p_level = 1 THEN 'Referral bonus (Level 1)'
+            ELSE 'Referral bonus (Level 2)'
+        END,
+        jsonb_build_object(
+            'referred_user_id', p_referred_user_id,
+            'deposit_amount', p_deposit_amount,
+            'level', p_level
+        )
+    ) RETURNING id INTO v_transaction_id;
+    
+    -- Оновлюємо статистику реферала
+    UPDATE referrals
+    SET 
+        total_deposits = COALESCE(total_deposits, 0) + p_deposit_amount,
+        total_bonuses_generated = COALESCE(total_bonuses_generated, 0) + p_amount,
+        last_deposit_at = NOW(),
+        bonus_paid = TRUE
+    WHERE referrer_id = p_referrer_id 
+        AND referred_id = p_referred_user_id
+        AND level = p_level;
+    
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Функція для отримання статистики по днях
+CREATE OR REPLACE FUNCTION get_daily_statistics(
+    start_date DATE,
+    end_date DATE
+)
+RETURNS TABLE (
+    date DATE,
+    new_users INTEGER,
+    new_orders INTEGER,
+    completed_orders INTEGER,
+    total_revenue NUMERIC,
+    total_deposits NUMERIC,
+    total_withdrawals NUMERIC
+) AS $$
+BEGIN
+    RETURN QUERY
+    WITH date_series AS (
+        SELECT generate_series(start_date, end_date, '1 day'::interval)::date AS date
+    )
+    SELECT 
+        ds.date,
+        COUNT(DISTINCT u.id) FILTER (WHERE u.created_at::date = ds.date)::INTEGER as new_users,
+        COUNT(DISTINCT o.id) FILTER (WHERE o.created_at::date = ds.date)::INTEGER as new_orders,
+        COUNT(DISTINCT o.id) FILTER (WHERE o.created_at::date = ds.date AND o.status = 'completed')::INTEGER as completed_orders,
+        COALESCE(SUM(o.charge) FILTER (WHERE o.created_at::date = ds.date), 0)::NUMERIC as total_revenue,
+        COALESCE(SUM(t.amount) FILTER (WHERE t.created_at::date = ds.date AND t.type = 'deposit'), 0)::NUMERIC as total_deposits,
+        COALESCE(ABS(SUM(t.amount) FILTER (WHERE t.created_at::date = ds.date AND t.type = 'withdrawal')), 0)::NUMERIC as total_withdrawals
+    FROM date_series ds
+    LEFT JOIN users u ON u.created_at::date = ds.date
+    LEFT JOIN orders o ON o.created_at::date = ds.date
+    LEFT JOIN transactions t ON t.created_at::date = ds.date
+    GROUP BY ds.date
+    ORDER BY ds.date;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Індекси для оптимізації
+CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_orders_created_status ON orders(created_at, status);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_type ON transactions(user_id, type);
+CREATE INDEX IF NOT EXISTS idx_transactions_created_type ON transactions(created_at, type);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer_level ON referrals(referrer_id, level);
+CREATE INDEX IF NOT EXISTS idx_users_referral_earnings ON users(referral_earnings) WHERE referral_earnings > 0;
+
 ### Очищення старих даних
 ```sql
 -- Видалення старих сесій
