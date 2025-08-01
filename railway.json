@@ -2,7 +2,8 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt"
+    "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+    "nixpacksConfigPath": "nixpacks.toml"
   },
   "deploy": {
     "numReplicas": 1,
@@ -15,6 +16,7 @@
   "envVars": {
     "PYTHON_VERSION": "3.11",
     "PORT": "8080",
-    "WEB_CONCURRENCY": "4"
+    "WEB_CONCURRENCY": "4",
+    "NIXPACKS_PYTHON_VERSION": "3.11"
   }
 }
