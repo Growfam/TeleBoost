@@ -4,6 +4,7 @@ TeleBoost Validators
 Функції для валідації даних
 """
 import re
+from datetime import datetime
 from typing import Dict, List, Optional, Union, Any, Tuple
 from urllib.parse import urlparse
 
@@ -418,6 +419,58 @@ def is_valid_uuid(uuid_string: str) -> bool:
         re.IGNORECASE
     )
     return bool(uuid_pattern.match(uuid_string))
+
+
+def validate_date_range(start_date: Union[str, datetime],
+                        end_date: Union[str, datetime],
+                        max_days: Optional[int] = 365,
+                        allow_future: bool = False) -> Tuple[bool, Optional[str]]:
+    """
+    Валідація діапазону дат
+
+    Args:
+        start_date: Початкова дата (string ISO format або datetime)
+        end_date: Кінцева дата (string ISO format або datetime)
+        max_days: Максимальна кількість днів між датами
+        allow_future: Чи дозволяти майбутні дати
+
+    Returns:
+        (is_valid, error_message)
+    """
+    try:
+        # Конвертуємо в datetime якщо потрібно
+        if isinstance(start_date, str):
+            start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        else:
+            start = start_date
+
+        if isinstance(end_date, str):
+            end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        else:
+            end = end_date
+
+    except (ValueError, TypeError) as e:
+        return False, 'Некоректний формат дати. Використовуйте ISO формат (YYYY-MM-DD)'
+
+    # Перевірка порядку дат
+    if start > end:
+        return False, 'Початкова дата має бути раніше кінцевої'
+
+    # Перевірка на майбутні дати
+    if not allow_future:
+        now = datetime.utcnow()
+        if start > now:
+            return False, 'Початкова дата не може бути в майбутньому'
+        if end > now:
+            return False, 'Кінцева дата не може бути в майбутньому'
+
+    # Перевірка максимального діапазону
+    if max_days:
+        delta = (end - start).days
+        if delta > max_days:
+            return False, f'Максимальний діапазон: {max_days} днів'
+
+    return True, None
 
 
 def validate_crypto_address(address: str, network: str) -> bool:
