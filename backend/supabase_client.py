@@ -52,31 +52,34 @@ class SupabaseClient:
         if not self._client:
             return None
 
-        # Періодична перевірка з'єднання
+        # Періодична перевірка з'єднання (БЕЗ рекурсії!)
         current_time = time.time()
         if current_time - self._last_connection_check > self._connection_check_interval:
-            if not self.test_connection():
-                logger.warning("Lost connection to Supabase")
+            # Безпосередньо перевіряємо з'єднання без виклику test_connection
+            try:
+                self._client.table('users').select('id').limit(1).execute()
+                self._last_connection_check = current_time
+            except Exception as e:
+                logger.warning(f"Lost connection to Supabase: {e}")
                 return None
-            self._last_connection_check = current_time
 
         return self._client
 
     def table(self, table_name: str):
         """Отримати референс на таблицю з перевіркою"""
-        if not self.client:
+        if not self._client:  # Перевіряємо _client напряму, а не через властивість
             raise ConnectionError("Supabase client not initialized")
-        return self.client.table(table_name)
+        return self._client.table(table_name)
 
     def rpc(self, function_name: str, params: Dict[str, Any] = None):
         """Виклик RPC функції з логуванням"""
-        if not self.client:
+        if not self._client:  # Перевіряємо _client напряму
             raise ConnectionError("Supabase client not initialized")
 
         logger.debug(f"Calling RPC: {function_name} with params: {params}")
 
         try:
-            result = self.client.rpc(function_name, params or {})
+            result = self._client.rpc(function_name, params or {})
             return result
         except Exception as e:
             logger.error(f"RPC call failed: {function_name}, error: {e}")
@@ -88,6 +91,21 @@ class SupabaseClient:
         # Supabase поки не підтримує транзакції через клієнт
         # Але ми готуємо інтерфейс для майбутнього
         yield self
+
+    # === Test Connection Method (FIXED) ===
+
+    def test_connection(self) -> bool:
+        """Тестувати з'єднання"""
+        if not self._client:  # Перевіряємо _client напряму
+            return False
+
+        try:
+            # Простий запит для перевірки БЕЗ виклику self.table()
+            self._client.table('users').select('id').limit(1).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Connection test failed: {e}")
+            return False
 
     # === User Methods ===
 
@@ -638,16 +656,6 @@ class SupabaseClient:
             return False
 
     # === Helper Methods ===
-
-    def test_connection(self) -> bool:
-        """Тестувати з'єднання"""
-        try:
-            # Простий запит для перевірки
-            self.table('users').select('id').limit(1).execute()
-            return True
-        except Exception as e:
-            logger.error(f"Connection test failed: {e}")
-            return False
 
     def get_user_by_id(self, user_id: str) -> Optional[Dict]:
         """Отримати користувача за ID"""
