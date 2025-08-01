@@ -179,34 +179,38 @@ class UserProfile(BaseUser):
     def update_stats(self) -> bool:
         """Оновити статистику користувача"""
         try:
-            # Підраховуємо статистику з таблиць
-            stats = supabase.client.rpc('calculate_user_stats', {
+            # Використовуємо функцію update_user_stats
+            result = supabase.client.rpc('update_user_stats', {
                 'p_user_id': self.id
             }).execute()
 
-            if stats.data:
-                update_data = {
-                    'total_orders': stats.data.get('total_orders', 0),
-                    'successful_orders': stats.data.get('successful_orders', 0),
-                    'failed_orders': stats.data.get('failed_orders', 0),
-                    'average_order_value': stats.data.get('average_order_value', 0),
-                    'lifetime_value': stats.data.get('lifetime_value', 0),
-                    'trust_score': self.calculate_trust_score(),
-                }
+            # Перезавантажуємо дані користувача
+            updated_user = supabase.table('users').select('*').eq('id', self.id).single().execute()
 
-                # Оновлюємо в БД
-                result = supabase.table('users').update(update_data).eq('id', self.id).execute()
+            if updated_user.data:
+                # Оновлюємо локальні дані
+                self.total_orders = updated_user.data.get('total_orders', 0)
+                self.successful_orders = updated_user.data.get('successful_orders', 0)
+                self.failed_orders = updated_user.data.get('failed_orders', 0)
+                self.average_order_value = float(updated_user.data.get('average_order_value', 0))
+                self.lifetime_value = float(updated_user.data.get('lifetime_value', 0))
+                self.last_order_at = updated_user.data.get('last_order_at')
 
-                if result.data:
-                    # Оновлюємо локальні дані
-                    for key, value in update_data.items():
-                        setattr(self, key, value)
+                # Розраховуємо trust score
+                self.trust_score = self.calculate_trust_score()
 
-                    # Інвалідуємо кеш
-                    redis_client.delete(f"user_profile:{self.id}")
-                    return True
+                # Оновлюємо trust_score в БД
+                supabase.table('users').update({
+                    'trust_score': self.trust_score
+                }).eq('id', self.id).execute()
+
+                # Інвалідуємо кеш
+                redis_client.delete(f"user_profile:{self.id}")
+
+                return True
 
             return False
+
         except Exception as e:
             logger.error(f"Error updating user stats: {e}")
             return False

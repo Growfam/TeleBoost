@@ -233,9 +233,18 @@ class UserService:
             if cached:
                 return cached
 
+            # Отримуємо користувача
             user = UserProfile.get_by_id(user_id)
             if not user:
                 return None
+
+            # Оновлюємо статистику через функцію БД
+            supabase.client.rpc('update_user_stats', {
+                'p_user_id': user_id
+            }).execute()
+
+            # Перезавантажуємо користувача з оновленими даними
+            user = UserProfile.get_by_id(user_id)
 
             # Статистика за періоди
             now = datetime.utcnow()
@@ -253,18 +262,21 @@ class UserService:
                     'failed_orders': user.failed_orders,
                     'success_rate': round(
                         (user.successful_orders / user.total_orders * 100) if user.total_orders > 0 else 0, 2),
-                    'average_order_value': user.average_order_value,
-                    'lifetime_value': user.lifetime_value,
-                    'trust_score': user.trust_score,
-                    'account_age_days': (now - datetime.fromisoformat(user.created_at.replace('Z', '+00:00'))).days
+                    'average_order_value': float(user.average_order_value),
+                    'lifetime_value': float(user.lifetime_value),
+                    'trust_score': float(user.trust_score),
+                    'account_age_days': (now - datetime.fromisoformat(
+                        user.created_at.replace('Z', '+00:00').replace('+00:00', ''))).days,
+                    'role': user.role,
+                    'is_vip': user.is_vip()
                 },
                 'financial': {
-                    'current_balance': user.balance,
-                    'total_deposited': user.total_deposited,
-                    'total_withdrawn': user.total_withdrawn,
-                    'total_spent': user.total_spent,
-                    'referral_earnings': user.referral_earnings,
-                    'profit': user.total_deposited - user.total_withdrawn - user.total_spent
+                    'current_balance': float(user.balance),
+                    'total_deposited': float(user.total_deposited),
+                    'total_withdrawn': float(user.total_withdrawn),
+                    'total_spent': float(user.total_spent),
+                    'referral_earnings': float(user.referral_earnings),
+                    'profit': float(user.total_deposited) - float(user.total_withdrawn) - float(user.total_spent)
                 },
                 'periods': {}
             }
@@ -404,11 +416,12 @@ class UserService:
                 'is_active': False,
                 'banned_at': datetime.utcnow().isoformat(),
                 'ban_reason': reason,
+                'role': 'banned',  # Оновлюємо роль на banned
                 'updated_at': datetime.utcnow().isoformat()
             }).eq('id', user_id).execute()
 
             if result.data:
-                # Логуємо дію
+                # Логуємо дію адміна
                 supabase.table('admin_actions').insert({
                     'admin_id': admin_id,
                     'action': 'ban_user',
@@ -416,6 +429,81 @@ class UserService:
                     'details': {'reason': reason},
                     'created_at': datetime.utcnow().isoformat()
                 }).execute()
+
+                # Створюємо сповіщення для користувача
+                UserNotification.create(
+                    user_id=user_id,
+                    notification_type='system_message',
+                    title='Ваш акаунт заблоковано',
+                    message=f'Причина: {reason}',
+                    data={'banned_at': datetime.utcnow().isoformat()}
+                )
+
+                # Завершуємо всі активні сесії
+                supabase.table('user_sessions').update({
+                    'is_active': False
+                }).eq('user_id', user_id).eq('is_active', True).execute()
+
+                # Інвалідуємо кеш
+                redis_client.delete(f"user_profile:{user_id}")
+                redis_client.delete(f"user:{user_id}")
+                redis_client.delete(f"balance_info:{user_id}")
+
+                # Логуємо подію
+                UserActivity(user_id).log_action('account_banned', {'reason': reason})
+
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Error banning user: {e}")
+            return False
+
+    @staticmethod
+    def unban_user(user_id: str, admin_id: str) -> bool:
+        """Розблокувати користувача"""
+        try:
+            # Отримуємо користувача для визначення попередньої ролі
+            user = UserProfile.get_by_id(user_id)
+            if not user:
+                return False
+
+            # Визначаємо яку роль встановити
+            new_role = USER_ROLES['DEFAULT']
+            if user.is_admin:
+                new_role = 'admin'
+            elif user.is_vip():
+                new_role = USER_ROLES['VIP']
+            elif user.is_premium:
+                new_role = USER_ROLES['PREMIUM']
+
+            result = supabase.table('users').update({
+                'is_active': True,
+                'banned_at': None,
+                'ban_reason': None,
+                'role': new_role,
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('id', user_id).execute()
+
+            if result.data:
+                # Логуємо дію адміна
+                supabase.table('admin_actions').insert({
+                    'admin_id': admin_id,
+                    'action': 'unban_user',
+                    'target_user_id': user_id,
+                    'details': {'restored_role': new_role},
+                    'created_at': datetime.utcnow().isoformat()
+                }).execute()
+
+                # Створюємо сповіщення
+                UserNotification.create(
+                    user_id=user_id,
+                    notification_type='system_message',
+                    title='Ваш акаунт розблоковано',
+                    message='Ви знову можете користуватися сервісом',
+                    data={'unbanned_at': datetime.utcnow().isoformat()}
+                )
 
                 # Інвалідуємо кеш
                 redis_client.delete(f"user_profile:{user_id}")
@@ -426,7 +514,7 @@ class UserService:
             return False
 
         except Exception as e:
-            logger.error(f"Error banning user: {e}")
+            logger.error(f"Error unbanning user: {e}")
             return False
 
 
@@ -534,3 +622,61 @@ class UserTransactionService:
         except Exception as e:
             logger.error(f"Error exporting transactions: {e}")
             return None
+
+    @staticmethod
+    def create_transaction_with_balance_update(user_id: str, transaction_type: str,
+                                               amount: float, description: str = None,
+                                               metadata: Dict = None) -> Tuple[bool, Optional[str]]:
+        """Створити транзакцію з атомарним оновленням балансу"""
+        try:
+            # Отримуємо користувача
+            user = UserProfile.get_by_id(user_id)
+            if not user:
+                return False, "Користувач не знайдений"
+
+            # Визначаємо операцію
+            if amount > 0:
+                operation = 'add'
+                balance_before = user.balance
+                balance_after = user.balance + amount
+            else:
+                operation = 'subtract'
+                balance_before = user.balance
+                balance_after = user.balance - abs(amount)
+
+                # Перевірка достатності коштів
+                if balance_after < 0:
+                    return False, "Недостатньо коштів"
+
+            # Оновлюємо баланс
+            success = supabase.update_user_balance(user_id, abs(amount), operation)
+            if not success:
+                return False, "Помилка оновлення балансу"
+
+            # Створюємо транзакцію
+            transaction_data = {
+                'user_id': user_id,
+                'type': transaction_type,
+                'amount': amount,
+                'balance_before': balance_before,
+                'balance_after': balance_after,
+                'description': description or f'{transaction_type.replace("_", " ").title()}',
+                'metadata': metadata or {}
+            }
+
+            result = supabase.create_transaction(transaction_data)
+            if result:
+                # Інвалідуємо кеш
+                redis_client.delete(f"balance_info:{user_id}")
+                redis_client.delete(f"user_profile:{user_id}")
+
+                return True, None
+            else:
+                # Відкатуємо баланс якщо не вдалося створити транзакцію
+                reverse_operation = 'subtract' if operation == 'add' else 'add'
+                supabase.update_user_balance(user_id, abs(amount), reverse_operation)
+                return False, "Помилка створення транзакції"
+
+        except Exception as e:
+            logger.error(f"Error creating transaction with balance update: {e}")
+            return False, "Внутрішня помилка"

@@ -13,6 +13,7 @@ from backend.supabase_client import supabase
 from backend.utils.redis_client import cache_user_data, get_cached_user_data, invalidate_user_cache
 from backend.utils.formatters import generate_referral_code
 from backend.utils.validators import validate_telegram_id
+from backend.utils.constants import USER_ROLES
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class User:
     def __init__(self, data: Dict[str, Any]):
         """Ініціалізація з даних БД"""
         self.id = data.get('id')  # UUID
-        self.telegram_id = data.get('telegram_id')  # String
+        self.telegram_id = str(data.get('telegram_id', ''))  # String
         self.username = data.get('username', '')
         self.first_name = data.get('first_name', '')
         self.last_name = data.get('last_name', '')
@@ -31,6 +32,9 @@ class User:
         self.is_premium = data.get('is_premium', False)
         self.is_admin = data.get('is_admin', False)
         self.is_active = data.get('is_active', True)
+
+        # Роль користувача
+        self.role = data.get('role', USER_ROLES['DEFAULT'])
 
         # Баланс та статистика
         self.balance = float(data.get('balance', 0))
@@ -88,6 +92,9 @@ class User:
             # Генеруємо унікальний реферальний код
             new_referral_code = generate_referral_code(telegram_id)
 
+            # Визначаємо роль (преміум користувачі отримують premium роль)
+            role = USER_ROLES['PREMIUM'] if telegram_data.get('is_premium', False) else USER_ROLES['DEFAULT']
+
             # Підготовка даних
             user_data = {
                 'telegram_id': telegram_id,
@@ -99,11 +106,15 @@ class User:
                 'photo_url': telegram_data.get('photo_url', ''),
                 'referral_code': new_referral_code,
                 'referred_by': referred_by_id,
+                'role': role,
                 'balance': 0,
+                'is_active': True,
                 'settings': {
                     'notifications': True,
                     'language': telegram_data.get('language_code', 'en'),
-                }
+                },
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
             }
 
             # Створюємо в БД
@@ -117,7 +128,7 @@ class User:
             # Кешуємо
             cache_user_data(user.telegram_id, user.to_dict())
 
-            logger.info(f"Created new user: {user.telegram_id}")
+            logger.info(f"Created new user: {user.telegram_id} with role: {user.role}")
 
             # Нараховуємо реферальний бонус якщо є реферер
             if referrer:
@@ -134,6 +145,10 @@ class User:
     def get_by_id(cls, user_id: str) -> Optional['User']:
         """Отримати користувача за ID (UUID)"""
         try:
+            # Валідація UUID
+            if not user_id:
+                return None
+
             result = supabase.table('users').select('*').eq('id', user_id).single().execute()
             if result.data:
                 return cls(result.data)
@@ -146,6 +161,9 @@ class User:
     def get_by_telegram_id(cls, telegram_id: str) -> Optional['User']:
         """Отримати користувача за Telegram ID"""
         try:
+            # Конвертуємо в string
+            telegram_id = str(telegram_id)
+
             # Спробуємо з кешу
             cached = get_cached_user_data(telegram_id)
             if cached:
@@ -168,6 +186,9 @@ class User:
     def get_by_referral_code(cls, referral_code: str) -> Optional['User']:
         """Отримати користувача за реферальним кодом"""
         try:
+            if not referral_code:
+                return None
+
             result = supabase.table('users') \
                 .select('*') \
                 .eq('referral_code', referral_code) \
@@ -187,13 +208,16 @@ class User:
             # Фільтруємо дані які можна оновлювати
             allowed_fields = [
                 'username', 'first_name', 'last_name', 'language_code',
-                'photo_url', 'settings', 'last_login', 'is_active'
+                'photo_url', 'settings', 'last_login', 'is_active', 'role'
             ]
 
             filtered_data = {k: v for k, v in update_data.items() if k in allowed_fields}
 
             if not filtered_data:
                 return True  # Нічого оновлювати
+
+            # Додаємо updated_at
+            filtered_data['updated_at'] = datetime.now(timezone.utc).isoformat()
 
             # Оновлюємо в БД
             updated = supabase.update_user(self.id, filtered_data)
@@ -206,6 +230,8 @@ class User:
 
             # Інвалідуємо кеш
             invalidate_user_cache(self.telegram_id)
+
+            logger.info(f"Updated user {self.id}: {list(filtered_data.keys())}")
 
             return True
 
@@ -233,6 +259,27 @@ class User:
             logger.error(f"Error updating balance for user {self.id}: {e}")
             return False
 
+    def update_role(self, new_role: str) -> bool:
+        """Оновити роль користувача"""
+        try:
+            if new_role not in USER_ROLES.values():
+                logger.error(f"Invalid role: {new_role}")
+                return False
+
+            return self.update({'role': new_role})
+
+        except Exception as e:
+            logger.error(f"Error updating role for user {self.id}: {e}")
+            return False
+
+    def is_vip(self) -> bool:
+        """Перевірити чи користувач VIP"""
+        return self.role == USER_ROLES['VIP']
+
+    def is_partner(self) -> bool:
+        """Перевірити чи користувач партнер"""
+        return self.role == USER_ROLES['PARTNER']
+
     def get_display_name(self) -> str:
         """Отримати ім'я для відображення"""
         if self.username:
@@ -258,6 +305,7 @@ class User:
             'is_premium': self.is_premium,
             'is_admin': self.is_admin,
             'is_active': self.is_active,
+            'role': self.role,
             'balance': self.balance,
             'total_deposited': self.total_deposited,
             'total_withdrawn': self.total_withdrawn,
@@ -283,6 +331,7 @@ class User:
             'display_name': self.get_display_name(),
             'language_code': self.language_code,
             'is_premium': self.is_premium,
+            'role': self.role,
             'balance': self.balance,
             'referral_code': self.referral_code,
             'photo_url': self.photo_url,
@@ -315,14 +364,16 @@ class UserSession:
                 'access_token_jti': access_jti,
                 'refresh_token_jti': refresh_jti,
                 'ip_address': ip_address,
-                'user_agent': user_agent,
+                'user_agent': user_agent[:500] if user_agent else None,  # Обмежуємо довжину
                 'expires_at': expires_at.isoformat(),
                 'is_active': True,
+                'created_at': datetime.now(timezone.utc).isoformat()
             }
 
             result = supabase.table('user_sessions').insert(session_data).execute()
 
             if result.data:
+                logger.info(f"Created session for user {user_id}")
                 return cls(result.data[0])
             return None
 
@@ -339,13 +390,32 @@ class UserSession:
                 .eq('user_id', user_id) \
                 .eq('is_active', True) \
                 .gt('expires_at', datetime.now(timezone.utc).isoformat()) \
+                .order('created_at', desc=True) \
                 .execute()
 
-            return [cls(data) for data in (result.data or [])]
+            sessions = [cls(data) for data in (result.data or [])]
+
+            # Очищаємо прострочені сесії
+            if sessions:
+                cls._cleanup_expired_sessions(user_id)
+
+            return sessions
 
         except Exception as e:
             logger.error(f"Error getting active sessions: {e}")
             return []
+
+    @classmethod
+    def _cleanup_expired_sessions(cls, user_id: str) -> None:
+        """Деактивувати прострочені сесії"""
+        try:
+            supabase.table('user_sessions') \
+                .update({'is_active': False}) \
+                .eq('user_id', user_id) \
+                .lt('expires_at', datetime.now(timezone.utc).isoformat()) \
+                .execute()
+        except Exception as e:
+            logger.error(f"Error cleaning up expired sessions: {e}")
 
     def deactivate(self) -> bool:
         """Деактивувати сесію"""
@@ -357,9 +427,28 @@ class UserSession:
 
             if result.data:
                 self.is_active = False
+                logger.info(f"Deactivated session {self.id}")
                 return True
             return False
 
         except Exception as e:
             logger.error(f"Error deactivating session: {e}")
             return False
+
+    @classmethod
+    def deactivate_all_user_sessions(cls, user_id: str) -> int:
+        """Деактивувати всі сесії користувача"""
+        try:
+            result = supabase.table('user_sessions') \
+                .update({'is_active': False}) \
+                .eq('user_id', user_id) \
+                .eq('is_active', True) \
+                .execute()
+
+            count = len(result.data) if result.data else 0
+            logger.info(f"Deactivated {count} sessions for user {user_id}")
+            return count
+
+        except Exception as e:
+            logger.error(f"Error deactivating all sessions: {e}")
+            return 0

@@ -169,12 +169,19 @@ class DashboardService:
             users_week = DashboardService._get_new_users_for_period(week_ago.isoformat(), now.isoformat())
             users_month = DashboardService._get_new_users_for_period(month_ago.isoformat(), now.isoformat())
 
+            # Порівняння з вчора
+            yesterday = (today - timedelta(days=1))
+            revenue_yesterday = DashboardService._get_revenue_for_period(
+                yesterday.isoformat(),
+                today.isoformat()
+            )
+
             return {
                 'revenue': {
                     'today': revenue_today,
                     'week': revenue_week,
                     'month': revenue_month,
-                    'today_vs_yesterday': DashboardService._calculate_change(revenue_today, 50)  # заглушка
+                    'today_vs_yesterday': DashboardService._calculate_change(revenue_today, revenue_yesterday)
                 },
                 'orders': {
                     'today': orders_today,
@@ -186,7 +193,7 @@ class DashboardService:
                     'today': users_today,
                     'week': users_week,
                     'month': users_month,
-                    'conversion_rate': 15.5  # заглушка
+                    'conversion_rate': 15.5  # Можна розрахувати реальну конверсію
                 }
             }
 
@@ -264,6 +271,17 @@ class DashboardService:
 
             revenue_change = DashboardService._calculate_change(this_week_revenue, last_week_revenue)
 
+            # Найкращий день (використовуємо RPC функцію)
+            daily_stats = supabase.client.rpc('get_daily_statistics', {
+                'start_date': this_week_start.date().isoformat(),
+                'end_date': now.date().isoformat()
+            }).execute()
+
+            best_day = 'Monday'
+            if daily_stats.data:
+                best_day_data = max(daily_stats.data, key=lambda x: x['total_revenue'])
+                best_day = datetime.fromisoformat(best_day_data['date']).strftime('%A')
+
             return {
                 'revenue': {
                     'current': this_week_revenue,
@@ -271,9 +289,9 @@ class DashboardService:
                     'change': revenue_change,
                     'trend': 'up' if revenue_change > 0 else 'down' if revenue_change < 0 else 'stable'
                 },
-                'best_day': 'Monday',  # заглушка
-                'peak_hours': [14, 15, 20, 21],  # заглушка
-                'growth_rate': 12.5  # заглушка
+                'best_day': best_day,
+                'peak_hours': [14, 15, 20, 21],  # Можна розрахувати з user_activities
+                'growth_rate': revenue_change
             }
 
         except Exception as e:
@@ -438,6 +456,10 @@ class ReportGenerator:
 
             net_profit = estimated_profit - total_referral_payouts
 
+            # Середня вартість замовлення (використовуємо RPC функцію)
+            avg_order_result = supabase.client.rpc('calculate_average_order_value').execute()
+            avg_order_value = float(avg_order_result.data) if avg_order_result.data else 0
+
             return {
                 'total_revenue': round(total_deposits, 2),
                 'total_order_revenue': round(total_order_revenue, 2),
@@ -446,7 +468,7 @@ class ReportGenerator:
                 'gross_profit': round(estimated_profit, 2),
                 'net_profit': round(net_profit, 2),
                 'profit_margin': round((net_profit / total_order_revenue * 100) if total_order_revenue > 0 else 0, 2),
-                'average_order_value': round(total_order_revenue / len(orders.data) if orders.data else 0, 2)
+                'average_order_value': round(avg_order_value, 2)
             }
 
         except Exception as e:
@@ -557,40 +579,31 @@ class ReportGenerator:
     def _get_daily_financial_data(start_date: datetime, end_date: datetime) -> List[Dict]:
         """Щоденні фінансові дані"""
         try:
+            # Використовуємо RPC функцію get_daily_statistics
+            result = supabase.client.rpc('get_daily_statistics', {
+                'start_date': start_date.date().isoformat(),
+                'end_date': end_date.date().isoformat()
+            }).execute()
+
+            if not result.data:
+                return []
+
             daily_data = []
-            current_date = start_date.date()
-
-            while current_date <= end_date.date():
-                day_start = datetime.combine(current_date, datetime.min.time())
-                day_end = datetime.combine(current_date, datetime.max.time())
-
-                # Доходи за день
-                deposits = supabase.table('transactions') \
-                    .select('amount') \
-                    .eq('type', TRANSACTION_TYPE.DEPOSIT) \
-                    .gte('created_at', day_start.isoformat()) \
-                    .lte('created_at', day_end.isoformat()) \
-                    .execute()
-                daily_revenue = sum(float(t['amount']) for t in (deposits.data or []))
-
-                # Замовлення за день
-                orders = supabase.table('orders') \
-                    .select('charge') \
-                    .gte('created_at', day_start.isoformat()) \
-                    .lte('created_at', day_end.isoformat()) \
-                    .execute()
-                daily_orders_count = len(orders.data or [])
-                daily_orders_value = sum(float(o['charge']) for o in (orders.data or []))
-
+            for row in result.data:
                 daily_data.append({
-                    'date': current_date.isoformat(),
-                    'revenue': round(daily_revenue, 2),
-                    'orders_count': daily_orders_count,
-                    'orders_value': round(daily_orders_value, 2),
-                    'average_order': round(daily_orders_value / daily_orders_count if daily_orders_count > 0 else 0, 2)
+                    'date': row['date'],
+                    'revenue': round(float(row['total_revenue']), 2),
+                    'orders_count': row['completed_orders'],
+                    'orders_value': round(float(row['total_revenue']), 2),
+                    'average_order': round(
+                        float(row['total_revenue']) / row['completed_orders']
+                        if row['completed_orders'] > 0 else 0,
+                        2
+                    ),
+                    'deposits': round(float(row['total_deposits']), 2),
+                    'withdrawals': round(float(row['total_withdrawals']), 2),
+                    'new_users': row['new_users']
                 })
-
-                current_date += timedelta(days=1)
 
             return daily_data
 
@@ -602,7 +615,7 @@ class ReportGenerator:
     def _get_top_performers(start_date: datetime, end_date: datetime) -> Dict[str, List]:
         """Топ користувачів та сервісів"""
         try:
-            # Топ користувачів по витратах
+            # Топ користувачів по витратах (використовуємо RPC функцію)
             top_users_result = supabase.client.rpc('get_top_spenders_for_period', {
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat(),
@@ -614,12 +627,12 @@ class ReportGenerator:
                 for user in top_users_result.data:
                     top_users.append({
                         'user_id': user['user_id'],
-                        'username': user['username'],
+                        'username': user.get('username', 'Unknown'),
                         'total_spent': round(float(user['total_spent']), 2),
                         'orders_count': user['orders_count']
                     })
 
-            # Топ сервісів
+            # Топ сервісів (використовуємо RPC функцію)
             top_services_result = supabase.client.rpc('get_top_services_for_period', {
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat(),
@@ -631,7 +644,7 @@ class ReportGenerator:
                 for service in top_services_result.data:
                     top_services.append({
                         'service_id': service['service_id'],
-                        'name': service['service_name'],
+                        'name': service.get('service_name', 'Unknown Service'),
                         'orders_count': service['orders_count'],
                         'revenue': round(float(service['total_revenue']), 2)
                     })
@@ -711,24 +724,27 @@ class ReportGenerator:
     def _calculate_financial_projections(start_date: datetime, end_date: datetime) -> Dict[str, Any]:
         """Розрахунок прогнозів"""
         try:
-            # Отримуємо щоденні дані
-            daily_data = ReportGenerator._get_daily_financial_data(start_date, end_date)
+            # Отримуємо щоденні дані через RPC функцію
+            daily_result = supabase.client.rpc('get_daily_statistics', {
+                'start_date': start_date.date().isoformat(),
+                'end_date': end_date.date().isoformat()
+            }).execute()
 
-            if not daily_data:
+            if not daily_result.data:
                 return {}
 
             # Конвертуємо в pandas для аналізу
-            df = pd.DataFrame(daily_data)
+            df = pd.DataFrame(daily_result.data)
             df['date'] = pd.to_datetime(df['date'])
             df = df.set_index('date')
 
             # Розраховуємо тренди
-            revenue_trend = np.polyfit(range(len(df)), df['revenue'], 1)[0]
-            orders_trend = np.polyfit(range(len(df)), df['orders_count'], 1)[0]
+            revenue_trend = np.polyfit(range(len(df)), df['total_revenue'].astype(float), 1)[0]
+            orders_trend = np.polyfit(range(len(df)), df['completed_orders'].astype(float), 1)[0]
 
             # Середні значення
-            avg_daily_revenue = df['revenue'].mean()
-            avg_daily_orders = df['orders_count'].mean()
+            avg_daily_revenue = float(df['total_revenue'].astype(float).mean())
+            avg_daily_orders = float(df['completed_orders'].astype(float).mean())
 
             # Прогнози
             days_ahead = 30
@@ -749,7 +765,7 @@ class ReportGenerator:
                 'projections_30_days': {
                     'expected_revenue': round(projected_revenue * 30, 2),
                     'expected_orders': round(projected_orders * 30),
-                    'confidence': 'medium'  # Базується на кількості даних
+                    'confidence': 'medium' if len(df) > 14 else 'low'
                 }
             }
 
@@ -760,7 +776,6 @@ class ReportGenerator:
     @staticmethod
     def _convert_to_csv(report: Dict) -> str:
         """Конвертувати звіт в CSV"""
-        # Спрощена версія - в реальності використовувати pandas
         csv_lines = []
         csv_lines.append("TeleBoost Financial Report")
         csv_lines.append(f"Period: {report['metadata']['period']['start']} to {report['metadata']['period']['end']}")
@@ -769,7 +784,21 @@ class ReportGenerator:
         # Summary
         csv_lines.append("FINANCIAL SUMMARY")
         for key, value in report['summary'].items():
+            csv_lines.append(f"{key.replace('_', ' ').title()},{value}")
+        csv_lines.append("")
+
+        # Revenue Breakdown
+        csv_lines.append("REVENUE BREAKDOWN")
+        csv_lines.append("Type,Amount")
+        for key, value in report['revenue_breakdown']['by_type'].items():
             csv_lines.append(f"{key},{value}")
+        csv_lines.append("")
+
+        # Daily Data
+        csv_lines.append("DAILY PERFORMANCE")
+        csv_lines.append("Date,Revenue,Orders,Deposits,Withdrawals")
+        for day in report['daily_data']:
+            csv_lines.append(f"{day['date']},{day['revenue']},{day['orders_count']},{day['deposits']},{day['withdrawals']}")
 
         return "\n".join(csv_lines)
 
@@ -777,8 +806,8 @@ class ReportGenerator:
     def _convert_to_excel(report: Dict) -> bytes:
         """Конвертувати звіт в Excel"""
         # Потребує openpyxl або xlsxwriter
-        # Заглушка
-        return b"Excel file content"
+        # Тимчасово повертаємо заглушку
+        return b"Excel file content - install openpyxl to generate real Excel files"
 
 
 class MetricsExporter:
@@ -793,19 +822,22 @@ class MetricsExporter:
             prometheus_metrics = []
 
             # Users metrics
-            prometheus_metrics.append(f'teleboost_users_total {metrics["users"]["total"]}')
-            prometheus_metrics.append(f'teleboost_users_active {metrics["users"]["active"]}')
-            prometheus_metrics.append(f'teleboost_users_vip {metrics["users"]["vip"]}')
+            if 'users' in metrics:
+                prometheus_metrics.append(f'teleboost_users_total {metrics["users"]["total"]}')
+                prometheus_metrics.append(f'teleboost_users_active {metrics["users"]["active"]}')
+                prometheus_metrics.append(f'teleboost_users_vip {metrics["users"]["vip"]}')
 
             # Orders metrics
-            prometheus_metrics.append(f'teleboost_orders_total {metrics["orders"]["total"]}')
-            prometheus_metrics.append(f'teleboost_orders_active {metrics["orders"]["active_orders"]}')
-            prometheus_metrics.append(f'teleboost_orders_today {metrics["orders"]["today_count"]}')
+            if 'orders' in metrics:
+                prometheus_metrics.append(f'teleboost_orders_total {metrics["orders"]["total"]}')
+                prometheus_metrics.append(f'teleboost_orders_active {metrics["orders"]["active_orders"]}')
+                prometheus_metrics.append(f'teleboost_orders_today {metrics["orders"]["today_count"]}')
 
             # Revenue metrics
-            prometheus_metrics.append(f'teleboost_revenue_total {metrics["revenue"]["total_deposits"]}')
-            prometheus_metrics.append(f'teleboost_revenue_today {metrics["revenue"]["today_revenue"]}')
-            prometheus_metrics.append(f'teleboost_profit_estimated {metrics["revenue"]["estimated_profit"]}')
+            if 'revenue' in metrics:
+                prometheus_metrics.append(f'teleboost_revenue_total {metrics["revenue"]["total_deposits"]}')
+                prometheus_metrics.append(f'teleboost_revenue_today {metrics["revenue"]["today_revenue"]}')
+                prometheus_metrics.append(f'teleboost_profit_estimated {metrics["revenue"]["estimated_profit"]}')
 
             # Performance metrics
             if 'performance' in metrics and 'cache' in metrics['performance']:
