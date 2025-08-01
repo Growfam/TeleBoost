@@ -161,41 +161,10 @@ def register_blueprints(app):
         app.register_blueprint(users_bp)
         logger.info("✅ Users blueprint registered (stub)")
 
-    # Orders routes
-    try:
-        from backend.orders.routes import orders_bp
-        app.register_blueprint(orders_bp)
-        logger.info("✅ Orders blueprint registered")
-    except ImportError:
-        logger.warning("⚠️ Orders module not found, using stub endpoints")
-        # Створюємо заглушку
-        from flask import Blueprint
-        from backend.middleware.auth_middleware import AuthMiddleware
-
-        orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
-
-        @orders_bp.route('/', methods=['GET'])
-        @AuthMiddleware.require_auth
-        def get_orders():
-            return jsonify({
-                'success': True,
-                'data': {
-                    'orders': [],
-                    'total': 0
-                }
-            })
-
-        @orders_bp.route('/', methods=['POST'])
-        @AuthMiddleware.require_auth
-        def create_order():
-            return jsonify({
-                'success': False,
-                'error': 'Orders not implemented yet',
-                'code': 'NOT_IMPLEMENTED'
-            }), 501
-
-        app.register_blueprint(orders_bp)
-        logger.info("✅ Orders blueprint registered (stub)")
+    # Orders routes - НОВА СЕКЦІЯ
+    from backend.orders.routes import orders_bp
+    app.register_blueprint(orders_bp)
+    logger.info("✅ Orders blueprint registered")
 
     # Statistics routes
     try:
@@ -266,7 +235,11 @@ def register_base_routes(app):
                     'list': 'GET /api/orders',
                     'create': 'POST /api/orders',
                     'details': 'GET /api/orders/{id}',
-                    'cancel': 'POST /api/orders/{id}/cancel'
+                    'status': 'GET /api/orders/{id}/status',
+                    'cancel': 'POST /api/orders/{id}/cancel',
+                    'refill': 'POST /api/orders/{id}/refill',
+                    'calculate': 'POST /api/orders/calculate-price',
+                    'statistics': 'GET /api/orders/statistics'
                 },
                 'payments': {
                     'create': 'POST /api/payments/create',
@@ -520,13 +493,45 @@ def init_services():
         raise
 
 
+def init_scheduler():
+    """Ініціалізація планувальника задач"""
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from backend.orders.tasks import register_order_tasks
+
+        # Створюємо планувальник
+        scheduler = BackgroundScheduler()
+
+        # Реєструємо задачі для замовлень
+        register_order_tasks(scheduler)
+
+        # Запускаємо планувальник
+        scheduler.start()
+
+        logger.info("✅ Task scheduler initialized")
+
+        return scheduler
+
+    except ImportError:
+        logger.warning("⚠️ APScheduler not installed, background tasks disabled")
+        return None
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize scheduler: {e}")
+        return None
+
+
 # Створюємо додаток
 app = create_app()
+
+# Глобальна змінна для планувальника
+scheduler = None
 
 # Для production (Gunicorn) потрібно ініціалізувати сервіси тут
 if __name__ != '__main__':
     try:
         init_services()
+        # Ініціалізуємо планувальник для production
+        scheduler = init_scheduler()
     except Exception as e:
         logger.error(f"❌ Failed to initialize services for production: {e}")
         # В production продовжуємо працювати навіть якщо щось не так
@@ -538,6 +543,9 @@ if __name__ == '__main__':
     try:
         # Ініціалізація сервісів
         init_services()
+
+        # Ініціалізація планувальника
+        scheduler = init_scheduler()
 
         # Інформація про запуск
         logger.info("=" * 50)
@@ -553,6 +561,8 @@ if __name__ == '__main__':
         logger.info(f"   - Performance: ✅ Monitoring active")
         logger.info(f"   - Referrals: ✅ Two-level system (7% + 2.5%)")
         logger.info(f"   - Payments: ✅ CryptoBot + NOWPayments")
+        logger.info(f"   - Orders: ✅ Full order management system")
+        logger.info(f"   - Scheduler: {'✅ Background tasks active' if scheduler else '⚠️ Background tasks disabled'}")
         logger.info("=" * 50)
 
         # Запуск Flask сервера
@@ -565,6 +575,10 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt:
         logger.info("\n⏹️ Server stopped by user")
+        # Зупиняємо планувальник якщо він працює
+        if scheduler and scheduler.running:
+            scheduler.shutdown()
+            logger.info("✅ Scheduler stopped")
     except Exception as e:
         logger.error(f"❌ Failed to start application: {e}")
         exit(1)

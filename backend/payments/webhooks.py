@@ -146,7 +146,7 @@ def _verify_cryptobot_signature(request) -> bool:
 
         # Обчислюємо очікуваний підпис
         expected_signature = hmac.new(
-            key=config.CRYPTOBOT_TOKEN.encode('utf-8'),
+            key=config.CRYPTOBOT_WEBHOOK_TOKEN.encode('utf-8'),
             msg=body.encode('utf-8'),
             digestmod=hashlib.sha256
         ).hexdigest()

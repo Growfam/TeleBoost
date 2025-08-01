@@ -35,7 +35,7 @@ class Config:
     # Database - Supabase (виправлено відповідно до Railway)
     SUPABASE_URL = os.getenv('SUPABASE_URL', '')
     SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')
-    SUPABASE_ANON_KEY = os.getenv('SUPABASE_KEY', '')  # Змінено з SUPABASE_ANON_KEY на SUPABASE_KEY
+    SUPABASE_KEY = os.getenv('SUPABASE_KEY', '')
 
     # Redis
     REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
