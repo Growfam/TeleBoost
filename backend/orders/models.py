@@ -116,7 +116,7 @@ class Order:
                 'quantity': quantity,
                 'comments': params.get('comments'),
                 'charge': price,
-                'status': 'pending',
+                'status': OrderStatus.PENDING,
                 'metadata': {
                     'service_name': service.name,
                     'service_type': service.type,
@@ -218,6 +218,20 @@ class Order:
                       start_count: Optional[int] = None, remains: Optional[int] = None) -> bool:
         """Оновити статус замовлення"""
         try:
+            # Валідація нового статусу
+            if new_status not in OrderStatus.all():
+                logger.error(f"Invalid status '{new_status}' for order {self.id}")
+                return False
+
+            # Перевірка дозволених переходів статусів
+            from backend.orders.validators import validate_order_status_transition
+            if not validate_order_status_transition(self.status, new_status):
+                logger.warning(
+                    f"Invalid status transition from '{self.status}' to '{new_status}' "
+                    f"for order {self.id}"
+                )
+                return False
+
             update_data = {
                 'status': new_status,
                 'updated_at': datetime.utcnow().isoformat()
@@ -257,6 +271,7 @@ class Order:
                 # Інвалідуємо кеш
                 redis_client.delete(f"order:{self.id}")
 
+                logger.info(f"Order {self.id} status updated from '{self.status}' to '{new_status}'")
                 return True
 
             return False

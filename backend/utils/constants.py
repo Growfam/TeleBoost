@@ -54,14 +54,14 @@ class TRANSACTION_TYPE:
 # === Order Status ===
 
 class OrderStatus:
-    """Статуси замовлень"""
-    PENDING = 'Pending'
-    IN_PROGRESS = 'In progress'
-    PROCESSING = 'Processing'
-    COMPLETED = 'Completed'
-    PARTIAL = 'Partial'
-    CANCELLED = 'Cancelled'
-    FAILED = 'Failed'
+    PENDING = 'pending'
+    IN_PROGRESS = 'in_progress'
+    PROCESSING = 'processing'
+    COMPLETED = 'completed'
+    PARTIAL = 'partial'
+    CANCELLED = 'cancelled'
+    FAILED = 'failed'
+
 
     @classmethod
     def all(cls):

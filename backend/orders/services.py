@@ -4,6 +4,7 @@ TeleBoost Order Services
 Бізнес-логіка для роботи з замовленнями
 """
 import logging
+import requests
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -16,6 +17,22 @@ from backend.utils.constants import OrderStatus, SERVICE_TYPE, TRANSACTION_TYPE
 from backend.services.validators import validate_service_order
 
 logger = logging.getLogger(__name__)
+
+# Мапінг статусів Nakrutochka на внутрішні
+NAKRUTOCHKA_STATUS_MAP = {
+    'Pending': OrderStatus.PENDING,
+    'In progress': OrderStatus.IN_PROGRESS,
+    'Processing': OrderStatus.PROCESSING,
+    'Completed': OrderStatus.COMPLETED,
+    'Partial': OrderStatus.PARTIAL,
+    'Canceled': OrderStatus.CANCELLED,
+    'Cancelled': OrderStatus.CANCELLED,  # Різні варіанти написання
+    'Failed': OrderStatus.FAILED,
+    # Додаткові статуси, які може повертати Nakrutochka
+    'Refunded': OrderStatus.CANCELLED,
+    'Error': OrderStatus.FAILED,
+    'Canceled by user': OrderStatus.CANCELLED,
+}
 
 
 class OrderService:
@@ -156,17 +173,43 @@ class OrderService:
             result = nakrutochka.get_order_status(order.external_id)
 
             if not result.get('success'):
+                logger.error(
+                    f"Failed to get status for order {order.id}: "
+                    f"{result.get('error', 'Unknown error')}"
+                )
                 return False
 
-            # Оновлюємо дані
-            new_status = result.get('status', OrderStatus.PROCESSING)
+            # Мапінг статусу з Nakrutochka
+            external_status = result.get('status', 'Processing')
+            new_status = NAKRUTOCHKA_STATUS_MAP.get(
+                external_status,
+                OrderStatus.PROCESSING  # Дефолтний статус
+            )
+
+            # Логування невідомих статусів
+            if external_status not in NAKRUTOCHKA_STATUS_MAP:
+                logger.warning(
+                    f"Unknown Nakrutochka status '{external_status}' for order {order.id}, "
+                    f"using default status '{new_status}'"
+                )
+
+            # Отримуємо додаткові дані
             start_count = result.get('start_count', 0)
             remains = result.get('remains', 0)
+
+            # Валідація даних
+            try:
+                start_count = int(start_count)
+                remains = int(remains)
+            except (ValueError, TypeError):
+                logger.error(f"Invalid numeric data from Nakrutochka for order {order.id}")
+                start_count = 0
+                remains = 0
 
             # Оновлюємо в БД
             return order.update_status(
                 new_status=new_status,
-                external_status=result.get('external_status'),
+                external_status=external_status,
                 start_count=start_count,
                 remains=remains
             )
@@ -320,13 +363,41 @@ class OrderProcessor:
                 logger.info(f"Order {order.id} sent to Nakrutochka with ID {external_id}")
                 return True, None
             else:
+                # Детальна обробка помилок
                 error = result.get('error', 'Unknown API error')
-                logger.error(f"Failed to send order to Nakrutochka: {error}")
-                return False, error
+                error_code = result.get('code', 'UNKNOWN')
 
+                # Мапінг помилок Nakrutochka на зрозумілі повідомлення
+                error_messages = {
+                    'NOT_ENOUGH_BALANCE': 'Недостатньо коштів на балансі Nakrutochka',
+                    'INVALID_LINK': 'Некоректне посилання для даного сервісу',
+                    'SERVICE_NOT_FOUND': 'Сервіс не знайдено в Nakrutochka',
+                    'QUANTITY_BELOW_MIN': f'Кількість менше мінімальної ({service.min})',
+                    'QUANTITY_ABOVE_MAX': f'Кількість більше максимальної ({service.max})',
+                    'INVALID_PARAMETERS': 'Некоректні параметри замовлення',
+                    'SERVICE_UNAVAILABLE': 'Сервіс тимчасово недоступний',
+                    'RATE_LIMIT': 'Перевищено ліміт запитів до API',
+                    'INVALID_API_KEY': 'Помилка авторизації API',
+                    'MAINTENANCE': 'API на технічному обслуговуванні',
+                }
+
+                user_friendly_error = error_messages.get(error_code, error)
+
+                logger.error(
+                    f"Failed to send order to Nakrutochka: {error} (code: {error_code})"
+                )
+
+                return False, user_friendly_error
+
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout sending order {order.id} to Nakrutochka")
+            return False, "Час очікування вичерпано. Спробуйте ще раз"
+        except requests.exceptions.ConnectionError:
+            logger.error(f"Connection error sending order {order.id} to Nakrutochka")
+            return False, "Помилка з'єднання з сервісом. Спробуйте пізніше"
         except Exception as e:
             logger.error(f"Error sending order to Nakrutochka: {e}")
-            return False, str(e)
+            return False, "Внутрішня помилка. Зверніться до підтримки"
 
     @staticmethod
     def cancel_in_nakrutochka(order: Order) -> bool:
@@ -372,6 +443,10 @@ class OrderProcessor:
             api_result = nakrutochka.get_multiple_order_status(external_ids)
 
             if not api_result.get('success'):
+                logger.error(
+                    f"Failed to get multiple order statuses: "
+                    f"{api_result.get('error', 'Unknown error')}"
+                )
                 for order in orders:
                     results[order.id] = False
                 return results
@@ -383,11 +458,26 @@ class OrderProcessor:
                 if order.external_id in statuses:
                     status_data = statuses[order.external_id]
 
+                    # Використання мапінгу статусів
+                    external_status = status_data.get('status', 'Processing')
+                    mapped_status = NAKRUTOCHKA_STATUS_MAP.get(
+                        external_status,
+                        order.status  # Залишаємо поточний статус якщо невідомий
+                    )
+
+                    # Валідація числових даних
+                    try:
+                        start_count = int(status_data.get('start_count', 0))
+                        remains = int(status_data.get('remains', 0))
+                    except (ValueError, TypeError):
+                        start_count = 0
+                        remains = 0
+
                     success = order.update_status(
-                        new_status=status_data.get('status', order.status),
-                        external_status=status_data.get('status'),
-                        start_count=status_data.get('start_count'),
-                        remains=status_data.get('remains')
+                        new_status=mapped_status,
+                        external_status=external_status,
+                        start_count=start_count,
+                        remains=remains
                     )
 
                     results[order.id] = success
