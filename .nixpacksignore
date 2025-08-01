@@ -1,9 +1,0 @@
-node_modules
-package.json
-package-lock.json
-frontend/
-venv/
-__pycache__/
-*.pyc
-.env
-.git/
