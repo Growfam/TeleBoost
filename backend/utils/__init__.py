@@ -13,7 +13,6 @@ __all__ = [
     'ORDER_STATUS',
     'PAYMENT_STATUS',
     'TRANSACTION_TYPE',
-    'REFERRAL_LEVELS',
     'CACHE_KEYS',
 
     # Formatters

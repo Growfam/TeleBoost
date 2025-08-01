@@ -79,6 +79,9 @@ class RateLimitMiddleware:
         # Register before_request handler
         app.before_request(self._check_rate_limit)
 
+        # Register after_request handler
+        app.after_request(self._add_rate_limit_headers)
+
         logger.info(f"Rate limit middleware initialized (Enabled: {self.enabled})")
 
     def _check_rate_limit(self) -> Optional[Any]:
@@ -115,13 +118,12 @@ class RateLimitMiddleware:
         # Check rate limit
         allowed, remaining, reset_time = self._check_limit(identifier, limit)
 
-        # Add rate limit headers
-        @app.after_request
-        def add_rate_limit_headers(response):
-            response.headers['X-RateLimit-Limit'] = str(limit)
-            response.headers['X-RateLimit-Remaining'] = str(max(0, remaining))
-            response.headers['X-RateLimit-Reset'] = str(int(reset_time))
-            return response
+        # Store rate limit data in g for use in after_request
+        g.rate_limit_data = {
+            'limit': limit,
+            'remaining': max(0, remaining),
+            'reset': int(reset_time)
+        }
 
         if not allowed:
             self.stats['requests_limited'] += 1
@@ -130,6 +132,15 @@ class RateLimitMiddleware:
 
         self.stats['requests_passed'] += 1
         return None
+
+    def _add_rate_limit_headers(self, response):
+        """Add rate limit headers to response"""
+        if hasattr(g, 'rate_limit_data'):
+            data = g.rate_limit_data
+            response.headers['X-RateLimit-Limit'] = str(data['limit'])
+            response.headers['X-RateLimit-Remaining'] = str(data['remaining'])
+            response.headers['X-RateLimit-Reset'] = str(data['reset'])
+        return response
 
     def _get_identifier(self) -> str:
         """Get unique identifier for rate limiting"""
