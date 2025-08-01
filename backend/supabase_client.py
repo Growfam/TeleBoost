@@ -436,6 +436,34 @@ class SupabaseClient:
             logger.error(f"Error getting referral chain: {e}")
             return {'level1': [], 'level2': []}
 
+    def process_referral_bonus_transaction(self, referrer_id: str, amount: float,
+                                           referred_user_id: str, deposit_amount: float,
+                                           level: int) -> bool:
+        """
+        Обробити реферальний бонус в одній транзакції
+
+        Ця функція повинна бути створена як stored procedure в Supabase
+        """
+        try:
+            result = self.client.rpc('process_referral_bonus', {
+                'p_referrer_id': referrer_id,
+                'p_amount': amount,
+                'p_referred_user_id': referred_user_id,
+                'p_deposit_amount': deposit_amount,
+                'p_level': level
+            }).execute()
+
+            # Перевіряємо результат
+            if result.data is None:
+                logger.error(f"Failed to process referral bonus: {result}")
+                return False
+
+            return bool(result.data)
+
+        except Exception as e:
+            logger.error(f"Error in referral bonus transaction: {e}")
+            return False
+
     # === Helper Methods ===
 
     def test_connection(self) -> bool:

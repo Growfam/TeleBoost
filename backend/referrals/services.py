@@ -185,20 +185,20 @@ def process_deposit_referral_bonuses(user_id: str, deposit_amount: float) -> Dic
 def _create_referral_transaction(referrer_id: str, amount: float, level: int,
                                  referred_user_id: str, deposit_amount: float) -> Optional[Dict]:
     """
-    Створити транзакцію реферального бонусу
+    Створити транзакцію реферального бонусу (тільки % від депозиту)
 
     Args:
         referrer_id: ID реферера
-        amount: Сума бонусу
-        level: Рівень реферала
-        referred_user_id: ID реферала
-        deposit_amount: Сума депозиту
+        amount: Сума бонусу (вже розрахована як % від депозиту)
+        level: Рівень реферала (1 або 2)
+        referred_user_id: ID реферала який зробив депозит
+        deposit_amount: Сума депозиту реферала
 
     Returns:
         Дані транзакції або None
     """
     try:
-        # Отримуємо поточний баланс
+        # Отримуємо поточний баланс реферера
         current_balance_result = supabase.table('users') \
             .select('balance') \
             .eq('id', referrer_id) \
@@ -212,8 +212,7 @@ def _create_referral_transaction(referrer_id: str, amount: float, level: int,
         current_balance = float(current_balance_result.data['balance'])
         new_balance = current_balance + amount
 
-        # Починаємо транзакцію
-        # 1. Оновлюємо баланс
+        # 1. Оновлюємо баланс реферера
         balance_updated = supabase.update_user_balance(referrer_id, amount, operation='add')
 
         if not balance_updated:
@@ -227,7 +226,7 @@ def _create_referral_transaction(referrer_id: str, amount: float, level: int,
             'amount': amount,
             'balance_before': current_balance,
             'balance_after': new_balance,
-            'description': f'Реферальний бонус {level} рівня ({REFERRAL_RATES[level] * 100}%)',
+            'description': f'Реферальний бонус {level} рівня ({REFERRAL_RATES[level] * 100}%) від депозиту {deposit_amount} USD',
             'metadata': {
                 'referral_level': level,
                 'referred_user_id': referred_user_id,
@@ -238,35 +237,40 @@ def _create_referral_transaction(referrer_id: str, amount: float, level: int,
 
         transaction = supabase.create_transaction(transaction_data)
 
-        if transaction:
-            # ВИПРАВЛЕНО: Оновлюємо referral_earnings користувача
-            # Використовуємо RPC функцію increment_value правильно
-            earnings_updated = supabase.client.rpc('increment_value', {
-                'table_name': 'users',
-                'column_name': 'referral_earnings',
-                'row_id': referrer_id,
-                'increment_by': amount
-            }).execute()
+        if not transaction:
+            logger.error(f"Failed to create transaction for user {referrer_id}")
+            # ВАЖЛИВО: Тут потрібно було б відкотити баланс, але без транзакцій це складно
+            return None
 
-            if not earnings_updated.data:
-                logger.warning(f"Failed to update referral_earnings for user {referrer_id}")
+        # 3. Оновлюємо referral_earnings користувача
+        earnings_result = supabase.client.rpc('increment_value', {
+            'table_name': 'users',
+            'column_name': 'referral_earnings',
+            'row_id': referrer_id,
+            'increment_by': amount
+        }).execute()
 
-            # Інвалідуємо кеш
-            invalidate_user_cache(referrer_id)
+        # Перевіряємо результат RPC виклику
+        if not earnings_result.data:
+            logger.error(f"Failed to update referral_earnings for user {referrer_id}: {earnings_result}")
+            # Продовжуємо, бо основні операції вже виконані
+        else:
+            logger.debug(f"Successfully updated referral_earnings for user {referrer_id}")
 
-            logger.info(
-                f"Created referral bonus transaction: referrer={referrer_id}, "
-                f"amount={amount}, level={level}"
-            )
+        # Інвалідуємо кеш
+        invalidate_user_cache(referrer_id)
 
-            return transaction
+        logger.info(
+            f"Created referral bonus transaction: referrer={referrer_id}, "
+            f"amount={amount} ({REFERRAL_RATES[level] * 100}%), level={level}, "
+            f"from deposit={deposit_amount}"
+        )
 
-        return None
+        return transaction
 
     except Exception as e:
-        logger.error(f"Error creating referral transaction: {e}")
+        logger.error(f"Error creating referral transaction: {e}", exc_info=True)
         return None
-
 
 def get_user_referrals(user_id: str, level: Optional[int] = None) -> List[Dict[str, Any]]:
     """
