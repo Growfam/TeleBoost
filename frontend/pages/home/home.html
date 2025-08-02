@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TeleBoost - Главная</title>
+
+    <!-- Preload fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <!-- Global styles -->
+    <link rel="stylesheet" href="/frontend/shared/ui/theme.css">
+    <link rel="stylesheet" href="/frontend/shared/ui/glassmorphism.css">
+    <link rel="stylesheet" href="/frontend/shared/ui/animations.css">
+
+    <!-- Page specific styles -->
+    <link rel="stylesheet" href="/frontend/pages/home/home.css">
+
+    <!-- Telegram Web App -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <!-- Background effects -->
+    <div class="background-wrapper">
+        <div class="background-gradient"></div>
+        <div class="floating-orbs">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="orb orb-3"></div>
+        </div>
+    </div>
+
+    <!-- Main container -->
+    <div class="container">
+        <!-- Header will be injected by JS -->
+        <header id="header-root"></header>
+
+        <!-- Main content -->
+        <main class="main-content">
+            <!-- Balance Card -->
+            <section id="balance-card-root" class="section-balance">
+                <!-- Balance card component will be injected here -->
+                <div class="skeleton-loader balance-skeleton">
+                    <div class="skeleton-line" style="width: 60%; height: 20px;"></div>
+                    <div class="skeleton-line" style="width: 80%; height: 40px; margin-top: 8px;"></div>
+                    <div class="skeleton-buttons">
+                        <div class="skeleton-button"></div>
+                        <div class="skeleton-button"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Services Grid -->
+            <section class="section-services">
+                <h2 class="section-title animate-fadeInUp">
+                    <span class="section-icon" id="services-icon"></span>
+                    <span class="shimmer-text">Популярные услуги</span>
+                </h2>
+                <div id="services-grid-root">
+                    <!-- Services grid component will be injected here -->
+                    <div class="services-skeleton">
+                        <div class="skeleton-service-card"></div>
+                        <div class="skeleton-service-card"></div>
+                        <div class="skeleton-service-card"></div>
+                        <div class="skeleton-service-card"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Orders -->
+            <section class="section-orders">
+                <h2 class="section-title animate-fadeInUp">
+                    <span class="section-icon" id="orders-icon"></span>
+                    <span>Последние заказы</span>
+                </h2>
+                <div id="recent-orders-root">
+                    <!-- Recent orders component will be injected here -->
+                    <div class="orders-skeleton">
+                        <div class="skeleton-order-item"></div>
+                        <div class="skeleton-order-item"></div>
+                        <div class="skeleton-order-item"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Stats -->
+            <section class="section-stats glass-card animate-fadeInUp">
+                <h3 class="stats-title">Статистика платформы</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-users">0</div>
+                        <div class="stat-label">Пользователей</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-orders">0</div>
+                        <div class="stat-label">Заказов</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="success-rate">0%</div>
+                        <div class="stat-label">Успешность</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Navigation will be injected by JS -->
+        <nav id="navigation-root"></nav>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-root"></div>
+
+    <!-- Modal container -->
+    <div id="modal-root"></div>
+
+    <!-- Main script with ES6 modules -->
+    <script type="module" src="/frontend/pages/home/home.js"></script>
+</body>
+</html>

@@ -6,7 +6,7 @@ TeleBoost Main Application
 import os
 import sys
 import logging
-from flask import Flask, jsonify, request, g
+from flask import Flask, jsonify, request, g, send_from_directory, render_template_string
 from flask_cors import CORS
 from datetime import datetime
 from werkzeug.exceptions import HTTPException
@@ -30,8 +30,11 @@ logger = logging.getLogger(__name__)
 def create_app():
     """Створення та налаштування Flask додатку"""
 
-    # Ініціалізація Flask
-    app = Flask(__name__)
+    # Ініціалізація Flask з підтримкою статичних файлів
+    app = Flask(__name__,
+                static_folder='../frontend/shared/ui',
+                static_url_path='/static')
+
     app.config.from_object(config)
 
     # Встановлюємо секретний ключ
@@ -72,9 +75,138 @@ def create_app():
     # Реєстрація базових маршрутів
     register_base_routes(app)
 
+    # Реєстрація frontend маршрутів
+    register_frontend_routes(app)
+
     logger.info("✅ Flask app created successfully")
 
     return app
+
+
+def register_frontend_routes(app):
+    """Реєстрація маршрутів для frontend"""
+
+    # Головна сторінка
+    @app.route('/')
+    def root():
+        """Кореневий маршрут"""
+        # Перевіряємо чи це запит від браузера
+        if request.headers.get('Accept', '').startswith('text/html'):
+            # Показуємо home.html
+            try:
+                return send_from_directory('../frontend/pages/home', 'home.html')
+            except:
+                # Fallback HTML
+                return """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>TeleBoost</title>
+                    <meta http-equiv="refresh" content="0; url=/home">
+                </head>
+                <body>
+                    <p>Redirecting to home page...</p>
+                </body>
+                </html>
+                """
+        else:
+            # API запит - повертаємо JSON
+            return jsonify({
+                'name': 'TeleBoost API',
+                'version': '1.0.0',
+                'status': 'online',
+                'environment': config.ENV,
+                'documentation': '/api/docs',
+                'health': '/health'
+            })
+
+    # Маршрут для home.html
+    @app.route('/home')
+    def home_page():
+        """Головна сторінка"""
+        try:
+            return send_from_directory('../frontend/pages/home', 'home.html')
+        except Exception as e:
+            logger.error(f"Failed to serve home.html: {e}")
+            return "Home page not found", 404
+
+    # Обслуговування всіх файлів з frontend
+    @app.route('/frontend/<path:path>')
+    def serve_frontend(path):
+        """Обслуговування frontend файлів"""
+        try:
+            # Визначаємо базову директорію
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            frontend_dir = os.path.join(base_dir, '..', 'frontend')
+
+            # Перевіряємо чи файл існує
+            file_path = os.path.join(frontend_dir, path)
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                # Повертаємо файл
+                directory = os.path.dirname(file_path)
+                filename = os.path.basename(file_path)
+                return send_from_directory(directory, filename)
+            else:
+                logger.warning(f"File not found: {path}")
+                return "File not found", 404
+
+        except Exception as e:
+            logger.error(f"Error serving frontend file {path}: {e}")
+            return "Internal server error", 500
+
+    # Спеціальні маршрути для компонентів
+    @app.route('/shared/<path:path>')
+    def serve_shared(path):
+        """Обслуговування shared файлів"""
+        return serve_frontend(f'shared/{path}')
+
+    @app.route('/pages/<path:path>')
+    def serve_pages(path):
+        """Обслуговування сторінок"""
+        return serve_frontend(f'pages/{path}')
+
+    # Маршрути для конкретних типів файлів
+    @app.route('/<path:filename>.js')
+    def serve_js(filename):
+        """Обслуговування JS файлів"""
+        # Шукаємо в різних директоріях
+        paths_to_try = [
+            f'pages/home/{filename}.js',
+            f'pages/home/components/{filename}.js',
+            f'shared/components/{filename}.js',
+            f'shared/services/{filename}.js',
+            f'shared/auth/{filename}.js',
+            f'shared/ui/{filename}.js',
+            f'shared/utils/{filename}.js'
+        ]
+
+        for path in paths_to_try:
+            try:
+                return serve_frontend(path)
+            except:
+                continue
+
+        return "JS file not found", 404
+
+    @app.route('/<path:filename>.css')
+    def serve_css(filename):
+        """Обслуговування CSS файлів"""
+        # Шукаємо в різних директоріях
+        paths_to_try = [
+            f'pages/home/{filename}.css',
+            f'shared/ui/{filename}.css'
+        ]
+
+        for path in paths_to_try:
+            try:
+                return serve_frontend(path)
+            except:
+                continue
+
+        return "CSS file not found", 404
+
+    logger.info("✅ Frontend routes registered")
 
 
 def register_blueprints(app):
@@ -161,7 +293,7 @@ def register_blueprints(app):
         app.register_blueprint(users_bp)
         logger.info("✅ Users blueprint registered (stub)")
 
-    # Orders routes - НОВА СЕКЦІЯ
+    # Orders routes
     from backend.orders.routes import orders_bp
     app.register_blueprint(orders_bp)
     logger.info("✅ Orders blueprint registered")
@@ -191,6 +323,20 @@ def register_blueprints(app):
                 }
             })
 
+        @statistics_bp.route('/live')
+        def live_statistics():
+            return jsonify({
+                'success': True,
+                'data': {
+                    'total_users': 15234,
+                    'total_orders': 45678,
+                    'services_available': 234,
+                    'average_completion_time': '2-6 hours',
+                    'success_rate': 98.5,
+                    'active_now': 127
+                }
+            })
+
         app.register_blueprint(statistics_bp)
         logger.info("✅ Statistics blueprint registered (stub)")
 
@@ -198,11 +344,11 @@ def register_blueprints(app):
 
 
 def register_base_routes(app):
-    """Реєстрація базових маршрутів"""
+    """Реєстрація базових API маршрутів"""
 
-    @app.route('/')
-    def index():
-        """Головна сторінка API"""
+    @app.route('/api')
+    def api_index():
+        """API інформація"""
         return jsonify({
             'name': 'TeleBoost API',
             'version': '1.0.0',
@@ -262,12 +408,8 @@ def register_base_routes(app):
                     'earnings': 'GET /api/referrals/earnings',
                     'promo': 'GET /api/referrals/promo-materials'
                 },
-                'api': {
-                    'health': 'GET /api/health',
-                    'external_balance': 'GET /api/external-balance',
-                    'test_connection': 'POST /api/test-connection',
-                    'supported_services': 'GET /api/supported-services',
-                    'system_info': 'GET /api/system-info'
+                'statistics': {
+                    'live': 'GET /api/statistics/live'
                 }
             }
         })
@@ -384,6 +526,7 @@ def register_base_routes(app):
                     'orders': True,
                     'payments': True,
                     'referrals': True,
+                    'frontend': True,
                     'middleware': {
                         'auth': True,
                         'cache': True,
@@ -484,6 +627,7 @@ def init_services():
         logger.info(f"Database: {'✅ Connected' if supabase.test_connection() else '❌ Not connected'}")
         logger.info(f"Redis: {'✅ Connected' if redis_client and redis_client.ping() else '⚠️ Not available'}")
         logger.info(f"Middleware: ✅ All systems initialized")
+        logger.info(f"Frontend: ✅ Static files serving enabled")
         logger.info(
             f"Referral System: ✅ Two-level (L1: {config.REFERRAL_BONUS_PERCENT}%, L2: {config.REFERRAL_BONUS_LEVEL2_PERCENT}%)")
         logger.info("=" * 50)
@@ -549,11 +693,13 @@ if __name__ == '__main__':
 
         # Інформація про запуск
         logger.info("=" * 50)
-        logger.info(f"🚀 Starting TeleBoost API")
+        logger.info(f"🚀 Starting TeleBoost API with Frontend")
         logger.info(f"📍 URL: http://{config.HOST}:{config.PORT}")
+        logger.info(f"🌐 Frontend: http://{config.HOST}:{config.PORT}/home")
         logger.info(f"🌍 Environment: {config.ENV}")
         logger.info(f"🐛 Debug Mode: {config.DEBUG}")
         logger.info(f"🔧 Features:")
+        logger.info(f"   - Frontend: ✅ Home page available at /home")
         logger.info(f"   - Middleware: ✅ All systems active")
         logger.info(f"   - Services: ✅ API integration ready")
         logger.info(f"   - Auth: ✅ JWT + Telegram Web App")
