@@ -135,10 +135,10 @@ def create_app():
 def register_frontend_routes(app):
     """Реєстрація маршрутів для frontend"""
 
-    # Головна сторінка - редірект на splash
+    # Головна сторінка - редірект на splash (ПУБЛІЧНИЙ)
     @app.route('/')
     def root():
-        """Кореневий маршрут"""
+        """Кореневий маршрут - ПУБЛІЧНИЙ"""
         # Перевіряємо чи це запит від браузера
         if request.headers.get('Accept', '').startswith('text/html'):
             # Показуємо index.html який редіректить на splash
@@ -170,10 +170,10 @@ def register_frontend_routes(app):
                 'health': '/health'
             })
 
-    # Маршрут для splash screen
+    # Маршрут для splash screen (ПУБЛІЧНИЙ)
     @app.route('/splash')
     def splash_page():
-        """Splash screen"""
+        """Splash screen - ПУБЛІЧНИЙ"""
         try:
             return send_from_directory('../frontend/pages', 'splash.html')
         except Exception as e:
@@ -193,30 +193,30 @@ def register_frontend_routes(app):
             </html>
             """
 
-    # Маршрут для login
+    # Маршрут для login (ПУБЛІЧНИЙ)
     @app.route('/login')
     def login_page():
-        """Сторінка логіну"""
+        """Сторінка логіну - ПУБЛІЧНИЙ"""
         try:
             return send_from_directory('../frontend/pages/login', 'login.html')
         except Exception as e:
             logger.error(f"Failed to serve login.html: {e}")
             return "Login page not found", 404
 
-    # Маршрут для home
+    # Маршрут для home (ПОТРЕБУЄ АВТОРИЗАЦІЇ - але сама сторінка публічна)
     @app.route('/home')
     def home_page():
-        """Головна сторінка"""
+        """Головна сторінка - ПУБЛІЧНИЙ HTML, авторизація перевіряється в JS"""
         try:
             return send_from_directory('../frontend/pages/home', 'home.html')
         except Exception as e:
             logger.error(f"Failed to serve home.html: {e}")
             return "Home page not found", 404
 
-    # Обслуговування всіх файлів з frontend
+    # Обслуговування всіх файлів з frontend (ПУБЛІЧНИЙ)
     @app.route('/frontend/<path:path>')
     def serve_frontend(path):
-        """Обслуговування frontend файлів"""
+        """Обслуговування frontend файлів - ПУБЛІЧНИЙ"""
         try:
             # Визначаємо базову директорію
             base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -237,21 +237,21 @@ def register_frontend_routes(app):
             logger.error(f"Error serving frontend file {path}: {e}")
             return "Internal server error", 500
 
-    # Спеціальні маршрути для компонентів
+    # Спеціальні маршрути для компонентів (ПУБЛІЧНИЙ)
     @app.route('/shared/<path:path>')
     def serve_shared(path):
-        """Обслуговування shared файлів"""
+        """Обслуговування shared файлів - ПУБЛІЧНИЙ"""
         return serve_frontend(f'shared/{path}')
 
     @app.route('/pages/<path:path>')
     def serve_pages(path):
-        """Обслуговування сторінок"""
+        """Обслуговування сторінок - ПУБЛІЧНИЙ"""
         return serve_frontend(f'pages/{path}')
 
-    # Маршрути для конкретних типів файлів
+    # Маршрути для конкретних типів файлів (ПУБЛІЧНИЙ)
     @app.route('/<path:filename>.js')
     def serve_js(filename):
-        """Обслуговування JS файлів"""
+        """Обслуговування JS файлів - ПУБЛІЧНИЙ"""
         # Шукаємо в різних директоріях
         paths_to_try = [
             f'pages/home/{filename}.js',
@@ -273,7 +273,7 @@ def register_frontend_routes(app):
 
     @app.route('/<path:filename>.css')
     def serve_css(filename):
-        """Обслуговування CSS файлів"""
+        """Обслуговування CSS файлів - ПУБЛІЧНИЙ"""
         # Шукаємо в різних директоріях
         paths_to_try = [
             f'pages/home/{filename}.css',
@@ -407,6 +407,7 @@ def register_blueprints(app):
 
         @statistics_bp.route('/live')
         def live_statistics():
+            """Live statistics - ПУБЛІЧНИЙ"""
             return jsonify({
                 'success': True,
                 'data': {
@@ -430,7 +431,7 @@ def register_base_routes(app):
 
     @app.route('/api')
     def api_index():
-        """API інформація"""
+        """API інформація - ПУБЛІЧНИЙ"""
         return jsonify({
             'name': 'TeleBoost API',
             'version': '1.0.0',
@@ -498,7 +499,7 @@ def register_base_routes(app):
 
     @app.route('/health')
     def health_check():
-        """Перевірка здоров'я сервісу"""
+        """Перевірка здоров'я сервісу - ПУБЛІЧНИЙ"""
         start = datetime.utcnow()
 
         # Перевіряємо компоненти
@@ -554,7 +555,7 @@ def register_base_routes(app):
 
     @app.route('/api/config')
     def get_public_config():
-        """Отримати публічну конфігурацію"""
+        """Отримати публічну конфігурацію - ПУБЛІЧНИЙ"""
         return jsonify({
             'success': True,
             'data': config.to_dict()
@@ -562,7 +563,7 @@ def register_base_routes(app):
 
     @app.route('/api/status')
     def api_status():
-        """Статус API з детальною статистикою"""
+        """Статус API з детальною статистикою - ПУБЛІЧНИЙ"""
         # Збираємо статистику middleware
         middleware_stats = {}
 
@@ -633,7 +634,7 @@ def register_base_routes(app):
 
     @app.route('/api/ping')
     def ping():
-        """Простий ping endpoint"""
+        """Простий ping endpoint - ПУБЛІЧНИЙ"""
         return jsonify({
             'success': True,
             'message': 'pong',
@@ -789,6 +790,27 @@ if __name__ == '__main__':
         logger.info(f"   - Payments: ✅ CryptoBot + NOWPayments")
         logger.info(f"   - Orders: ✅ Full order management system")
         logger.info(f"   - Scheduler: {'✅ Background tasks active' if scheduler else '⚠️ Background tasks disabled'}")
+        logger.info("=" * 50)
+        logger.info("")
+        logger.info("📌 PUBLIC ROUTES (NO AUTH REQUIRED):")
+        logger.info("   - GET  /              → Splash redirect")
+        logger.info("   - GET  /splash        → Splash screen")
+        logger.info("   - GET  /login         → Login page")
+        logger.info("   - GET  /home          → Home page (auth checked in JS)")
+        logger.info("   - GET  /frontend/*    → Static files")
+        logger.info("   - GET  /shared/*      → Shared components")
+        logger.info("   - GET  /pages/*       → Page files")
+        logger.info("   - GET  /*.js          → JavaScript files")
+        logger.info("   - GET  /*.css         → CSS files")
+        logger.info("   - GET  /api           → API info")
+        logger.info("   - GET  /api/config    → Public config")
+        logger.info("   - GET  /api/status    → API status")
+        logger.info("   - GET  /api/ping      → Health check")
+        logger.info("   - GET  /health        → Detailed health")
+        logger.info("   - GET  /api/statistics/live → Live stats")
+        logger.info("")
+        logger.info("🔐 PROTECTED ROUTES (AUTH REQUIRED):")
+        logger.info("   - All other /api/* routes")
         logger.info("=" * 50)
 
         # Запуск Flask сервера
