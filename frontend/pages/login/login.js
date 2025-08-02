@@ -9,6 +9,8 @@ import { ToastProvider } from '/frontend/shared/components/Toast.js';
 class LoginPage {
   constructor() {
     this.telegramAuth = null;
+    this.initAttempts = 0;
+    this.maxInitAttempts = 5;
   }
 
   /**
@@ -20,7 +22,10 @@ class LoginPage {
     toastProvider.init();
 
     // Перевіряємо чи вже авторизований
-    await this.checkExistingAuth();
+    const hasAuth = await this.checkExistingAuth();
+    if (hasAuth) {
+      return; // Вже редіректнули
+    }
 
     // Ініціалізуємо Telegram Web App
     this.initTelegram();
@@ -46,14 +51,16 @@ class LoginPage {
           if (expiresAt > new Date()) {
             // Токен валідний - перенаправляємо на головну
             console.log('User already authenticated, redirecting...');
-            window.location.href = '/';
-            return;
+            window.location.href = '/home';
+            return true;
           }
         }
       }
     } catch (error) {
       console.error('Error checking auth:', error);
     }
+
+    return false;
   }
 
   /**
@@ -81,6 +88,61 @@ class LoginPage {
           startParam: tg.initDataUnsafe?.start_param
         });
       }
+
+      // Намагаємось автологін після ready
+      this.attemptAutoLogin();
+    } else {
+      // Показуємо попередження що потрібен Telegram
+      this.showBrowserWarning();
+    }
+  }
+
+  /**
+   * Спроба автологіну
+   */
+  attemptAutoLogin() {
+    // Чекаємо трохи щоб initData була готова
+    setTimeout(() => {
+      const tg = window.Telegram?.WebApp;
+
+      if (tg?.initData && this.telegramAuth) {
+        console.log('Attempting auto-login with Telegram data');
+        this.telegramAuth.handleAuth();
+      } else if (this.initAttempts < this.maxInitAttempts) {
+        // Пробуємо ще раз через більший інтервал
+        this.initAttempts++;
+        setTimeout(() => this.attemptAutoLogin(), 200 * this.initAttempts);
+      } else {
+        console.log('Auto-login not available - no initData');
+      }
+    }, 100);
+  }
+
+  /**
+   * Показати попередження для браузера
+   */
+  showBrowserWarning() {
+    const warningHtml = `
+      <div class="browser-warning glass-card animate-fadeIn">
+        <div class="warning-icon">⚠️</div>
+        <h3 class="warning-title">Telegram Required</h3>
+        <p class="warning-text">
+          Цей додаток працює тільки через Telegram.
+          <br>
+          Будь ласка, відкрийте бота в Telegram.
+        </p>
+        <a href="https://t.me/${window.CONFIG?.BOT_USERNAME || 'TeleeBoost_bot'}" 
+           class="btn btn-primary" 
+           target="_blank">
+          Відкрити в Telegram
+        </a>
+      </div>
+    `;
+
+    // Додаємо попередження в auth-container
+    const authContainer = document.getElementById('auth-container');
+    if (authContainer) {
+      authContainer.innerHTML = warningHtml;
     }
   }
 
@@ -111,7 +173,7 @@ class LoginPage {
 
     // Перенаправляємо на головну через 1 секунду
     setTimeout(() => {
-      window.location.href = '/';
+      window.location.href = '/home';
     }, 1000);
   }
 
@@ -121,8 +183,21 @@ class LoginPage {
   handleAuthError(error) {
     console.error('Auth error:', error);
 
+    // Показуємо специфічне повідомлення для різних помилок
+    let errorMessage = 'Не вдалося увійти. Спробуйте ще раз.';
+
+    if (error.message?.includes('Telegram WebApp недоступний')) {
+      errorMessage = 'Будь ласка, відкрийте додаток через Telegram';
+      this.showBrowserWarning();
+      return;
+    } else if (error.code === 'INVALID_TELEGRAM_DATA') {
+      errorMessage = 'Неправильні дані від Telegram. Спробуйте перезапустити бота.';
+    } else if (error.code === 'USER_CREATION_FAILED') {
+      errorMessage = 'Не вдалося створити користувача. Зверніться до підтримки.';
+    }
+
     if (window.showToast) {
-      window.showToast(error.message || 'Помилка авторизації', 'error');
+      window.showToast(errorMessage, 'error');
     }
 
     // Показуємо додаткове повідомлення
@@ -130,12 +205,12 @@ class LoginPage {
     errorContainer.className = 'error-container animate-fadeIn';
     errorContainer.innerHTML = `
       <p class="error-message">
-        ${error.message || 'Не вдалося увійти. Спробуйте ще раз.'}
+        ${error.message || errorMessage}
       </p>
     `;
 
     const authContainer = document.getElementById('auth-container');
-    if (authContainer) {
+    if (authContainer && !authContainer.querySelector('.browser-warning')) {
       authContainer.appendChild(errorContainer);
 
       // Видаляємо через 5 секунд
@@ -169,6 +244,49 @@ class LoginPage {
       this.telegramAuth.destroy();
     }
   }
+}
+
+// Стилі для browser warning
+const warningStyles = `
+<style>
+.browser-warning {
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 32px;
+  text-align: center;
+}
+
+.warning-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.warning-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.warning-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.browser-warning .btn {
+  width: 100%;
+}
+</style>
+`;
+
+// Додаємо стилі
+if (!document.getElementById('warning-styles')) {
+  const styleElement = document.createElement('div');
+  styleElement.id = 'warning-styles';
+  styleElement.innerHTML = warningStyles;
+  document.head.appendChild(styleElement);
 }
 
 // Ініціалізація при завантаженні

@@ -1,7 +1,7 @@
 // frontend/shared/auth/TelegramAuth.js
 /**
  * Компонент Telegram авторизації для TeleBoost
- * Виправлена версія з правильним збереженням токенів
+ * Оновлена версія з покращеною обробкою помилок
  */
 
 import { getIcon } from '../ui/svg.js';
@@ -169,6 +169,63 @@ const styles = `
   text-align: center;
 }
 
+/* Browser warning styles */
+.browser-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
+  animation: slideUp 0.6s ease-out;
+}
+
+.warning-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(245, 158, 11, 0.2);
+  border-radius: 12px;
+}
+
+.warning-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.warning-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.warning-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #0088cc 0%, #0077bb 100%);
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.warning-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 136, 204, 0.3);
+}
+
 .premium-badge {
   display: inline-flex;
   align-items: center;
@@ -244,10 +301,12 @@ export class TelegramAuth {
       isLoading: false,
       error: null,
       user: null,
-      isAuthenticated: false
+      isAuthenticated: false,
+      isTelegramAvailable: false
     };
 
     this.element = null;
+    this.autoLoginAttempted = false;
   }
 
   /**
@@ -257,28 +316,74 @@ export class TelegramAuth {
     return `
       ${styles}
       <div class="telegram-auth-container">
-        <div class="telegram-auth-card">
-          <div class="auth-glow"></div>
-          
-          <!-- Header -->
-          <div class="auth-header">
-            <div class="auth-icon-container">
-              ${getIcon('telegram', '', 32)}
-            </div>
-            <h2 class="auth-title">
-              ${this.state.isAuthenticated ? 'Ласкаво просимо!' : 'Вхід через Telegram'}
-            </h2>
-            <p class="auth-subtitle">
-              ${this.state.isAuthenticated 
-                ? 'Ви успішно увійшли в систему' 
-                : 'Безпечна авторизація через Telegram'
-              }
-            </p>
-          </div>
+        ${this.state.isTelegramAvailable ? this.renderAuthCard() : this.renderBrowserWarning()}
+      </div>
+    `;
+  }
 
-          ${this.renderContent()}
+  /**
+   * Рендер карточки авторизації
+   */
+  renderAuthCard() {
+    return `
+      <div class="telegram-auth-card">
+        <div class="auth-glow"></div>
+        
+        <!-- Header -->
+        <div class="auth-header">
+          <div class="auth-icon-container">
+            ${getIcon('telegram', '', 32)}
+          </div>
+          <h2 class="auth-title">
+            ${this.state.isAuthenticated ? 'Ласкаво просимо!' : 'Вхід через Telegram'}
+          </h2>
+          <p class="auth-subtitle">
+            ${this.state.isAuthenticated 
+              ? 'Ви успішно увійшли в систему' 
+              : 'Безпечна авторизація через Telegram'
+            }
+          </p>
+        </div>
+
+        ${this.renderContent()}
+      </div>
+    `;
+  }
+
+  /**
+   * Рендер попередження для браузера
+   */
+  renderBrowserWarning() {
+    return `
+      <div class="browser-warning">
+        <div class="warning-icon">
+          ${getIcon('warning', '', 32)}
+        </div>
+        <h3 class="warning-title">Відкрийте в Telegram</h3>
+        <p class="warning-text">
+          Цей додаток працює тільки в Telegram.<br>
+          Натисніть кнопку нижче, щоб відкрити бота.
+        </p>
+        <div style="text-align: center;">
+          <a href="https://t.me/${this.options.botUsername}" class="warning-link" target="_blank">
+            ${getIcon('telegram', '', 20)}
+            <span>Відкрити в Telegram</span>
+          </a>
         </div>
       </div>
+      
+      <!-- Показуємо кнопку для тестування в dev режимі -->
+      ${window.CONFIG?.DEBUG ? `
+        <div class="telegram-auth-card" style="margin-top: 20px; opacity: 0.7;">
+          <div class="auth-header">
+            <h3 style="font-size: 16px; margin-bottom: 16px;">Режим розробки</h3>
+          </div>
+          <button class="auth-button" onclick="window.telegramAuth.handleDevLogin()">
+            ${getIcon('profile', '', 20)}
+            <span>Тестовий вхід</span>
+          </button>
+        </div>
+      ` : ''}
     `;
   }
 
@@ -389,6 +494,9 @@ export class TelegramAuth {
       return;
     }
 
+    // Перевіряємо доступність Telegram
+    this.checkTelegramAvailability();
+
     // Рендеримо компонент
     this.element.innerHTML = this.render();
 
@@ -398,9 +506,27 @@ export class TelegramAuth {
     // Ініціалізуємо Telegram Web App
     this.initTelegram();
 
-    // Автологін якщо увімкнено
-    if (this.options.autoLogin && window.Telegram?.WebApp?.initDataUnsafe?.user) {
-      setTimeout(() => this.handleAuth(), 500);
+    // Автологін якщо увімкнено і доступний Telegram
+    if (this.options.autoLogin && this.state.isTelegramAvailable && !this.autoLoginAttempted) {
+      this.autoLoginAttempted = true;
+      setTimeout(() => {
+        if (window.Telegram?.WebApp?.initData) {
+          this.handleAuth();
+        }
+      }, 500);
+    }
+  }
+
+  /**
+   * Перевірка доступності Telegram
+   */
+  checkTelegramAvailability() {
+    const tg = window.Telegram?.WebApp;
+    this.state.isTelegramAvailable = !!(tg && tg.initData);
+
+    // В режимі розробки завжди показуємо інтерфейс
+    if (window.CONFIG?.DEBUG && !this.state.isTelegramAvailable) {
+      console.log('Debug mode: Telegram not available, showing browser warning');
     }
   }
 
@@ -433,7 +559,7 @@ export class TelegramAuth {
       const tg = window.Telegram.WebApp;
 
       if (!tg || !tg.initData) {
-        throw new Error('Telegram WebApp недоступний');
+        throw new Error('Telegram WebApp недоступний. Відкрийте додаток в Telegram.');
       }
 
       // Отримуємо дані користувача
@@ -461,7 +587,7 @@ export class TelegramAuth {
         throw new Error(data.error || 'Помилка авторизації');
       }
 
-      // ВИПРАВЛЕННЯ: Зберігаємо токени правильно як об'єкт
+      // Зберігаємо токени
       const authData = {
         access_token: data.data.tokens.access_token,
         refresh_token: data.data.tokens.refresh_token,
@@ -469,12 +595,7 @@ export class TelegramAuth {
         expires_at: new Date(Date.now() + (data.data.tokens.expires_in || 86400) * 1000).toISOString()
       };
 
-      // Зберігаємо в localStorage як об'єкт
       localStorage.setItem('auth', JSON.stringify(authData));
-
-      // Видаляємо старі ключі якщо вони є
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('refresh_token');
 
       // Оновлюємо стан
       this.setState({
@@ -491,12 +612,8 @@ export class TelegramAuth {
 
       // Показуємо успішну кнопку на 1.5 секунди
       setTimeout(() => {
-        // Закриваємо або перенаправляємо
-        if (tg.close) {
-          tg.close();
-        } else {
-          window.location.href = '/';
-        }
+        // Редіректимо на головну сторінку
+        window.location.href = '/home';
       }, 1500);
 
     } catch (err) {
@@ -506,6 +623,56 @@ export class TelegramAuth {
         isLoading: false
       });
       this.options.onError(err);
+    }
+  }
+
+  /**
+   * Тестовий вхід для розробки
+   */
+  async handleDevLogin() {
+    if (!window.CONFIG?.DEBUG) return;
+
+    try {
+      this.setState({ isLoading: true, error: null });
+
+      // Емулюємо дані користувача
+      const testUser = {
+        id: '12345678',
+        telegram_id: '12345678',
+        first_name: 'Test',
+        last_name: 'User',
+        username: 'testuser',
+        is_premium: false,
+        balance: 100
+      };
+
+      // Емулюємо токени
+      const authData = {
+        access_token: 'test_token_' + Date.now(),
+        refresh_token: 'test_refresh_' + Date.now(),
+        user: testUser,
+        expires_at: new Date(Date.now() + 86400 * 1000).toISOString()
+      };
+
+      localStorage.setItem('auth', JSON.stringify(authData));
+
+      this.setState({
+        user: testUser,
+        isAuthenticated: true,
+        isLoading: false
+      });
+
+      // Редіректимо на головну
+      setTimeout(() => {
+        window.location.href = '/home';
+      }, 1000);
+
+    } catch (err) {
+      console.error('Dev login error:', err);
+      this.setState({
+        error: 'Помилка тестового входу',
+        isLoading: false
+      });
     }
   }
 
@@ -549,7 +716,7 @@ export class TelegramAuth {
 }
 
 /**
- * Hook для Telegram авторизації
+ * Hook для Telegram авторизації (для сумісності)
  */
 export const useTelegramAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -562,7 +729,6 @@ export const useTelegramAuth = () => {
 
   const checkAuth = async () => {
     try {
-      // ВИПРАВЛЕННЯ: Читаємо токен з правильного місця
       const authData = JSON.parse(localStorage.getItem('auth') || '{}');
       const token = authData.access_token;
 

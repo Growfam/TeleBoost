@@ -86,27 +86,27 @@ def create_app():
 def register_frontend_routes(app):
     """Реєстрація маршрутів для frontend"""
 
-    # Головна сторінка
+    # Головна сторінка - редірект на splash
     @app.route('/')
     def root():
         """Кореневий маршрут"""
         # Перевіряємо чи це запит від браузера
         if request.headers.get('Accept', '').startswith('text/html'):
-            # Показуємо home.html
+            # Показуємо index.html який редіректить на splash
             try:
-                return send_from_directory('../frontend/pages/home', 'home.html')
+                return send_from_directory('../frontend/pages', 'index.html')
             except:
-                # Fallback HTML
+                # Fallback редірект
                 return """
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <meta charset="UTF-8">
                     <title>TeleBoost</title>
-                    <meta http-equiv="refresh" content="0; url=/home">
+                    <meta http-equiv="refresh" content="0; url=/splash">
                 </head>
                 <body>
-                    <p>Redirecting to home page...</p>
+                    <p>Redirecting...</p>
                 </body>
                 </html>
                 """
@@ -121,7 +121,40 @@ def register_frontend_routes(app):
                 'health': '/health'
             })
 
-    # Маршрут для home.html
+    # Маршрут для splash screen
+    @app.route('/splash')
+    def splash_page():
+        """Splash screen"""
+        try:
+            return send_from_directory('../frontend/pages', 'splash.html')
+        except Exception as e:
+            logger.error(f"Failed to serve splash.html: {e}")
+            # Fallback на логін
+            return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>TeleBoost</title>
+                <meta http-equiv="refresh" content="0; url=/login">
+            </head>
+            <body>
+                <p>Redirecting to login...</p>
+            </body>
+            </html>
+            """
+
+    # Маршрут для login
+    @app.route('/login')
+    def login_page():
+        """Сторінка логіну"""
+        try:
+            return send_from_directory('../frontend/pages/login', 'login.html')
+        except Exception as e:
+            logger.error(f"Failed to serve login.html: {e}")
+            return "Login page not found", 404
+
+    # Маршрут для home
     @app.route('/home')
     def home_page():
         """Головна сторінка"""
@@ -695,11 +728,11 @@ if __name__ == '__main__':
         logger.info("=" * 50)
         logger.info(f"🚀 Starting TeleBoost API with Frontend")
         logger.info(f"📍 URL: http://{config.HOST}:{config.PORT}")
-        logger.info(f"🌐 Frontend: http://{config.HOST}:{config.PORT}/home")
+        logger.info(f"🌐 Frontend: http://{config.HOST}:{config.PORT}/splash")
         logger.info(f"🌍 Environment: {config.ENV}")
         logger.info(f"🐛 Debug Mode: {config.DEBUG}")
         logger.info(f"🔧 Features:")
-        logger.info(f"   - Frontend: ✅ Home page available at /home")
+        logger.info(f"   - Frontend: ✅ Splash screen at /splash")
         logger.info(f"   - Middleware: ✅ All systems active")
         logger.info(f"   - Services: ✅ API integration ready")
         logger.info(f"   - Auth: ✅ JWT + Telegram Web App")

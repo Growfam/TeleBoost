@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TeleBoost - Завантаження...</title>
+
+    <!-- Telegram Web App -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- Global Configuration -->
+    <script src="/frontend/config.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Background gradient */
+        .background {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #000 0%, #1a0033 50%, #000 100%);
+            z-index: -1;
+        }
+
+        /* Floating orbs */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.4;
+            animation: float 15s infinite ease-in-out;
+        }
+
+        .orb-1 {
+            width: 300px;
+            height: 300px;
+            background: #6b46c1;
+            top: -150px;
+            left: -150px;
+        }
+
+        .orb-2 {
+            width: 250px;
+            height: 250px;
+            background: #9333ea;
+            bottom: -125px;
+            right: -125px;
+            animation-delay: 5s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+
+        /* Splash container */
+        .splash-container {
+            text-align: center;
+            z-index: 1;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Logo */
+        .logo-container {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 32px;
+            position: relative;
+        }
+
+        .logo-glow {
+            position: absolute;
+            inset: -20px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            filter: drop-shadow(0 0 20px rgba(168, 85, 247, 0.5));
+            animation: logoFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+            50% { transform: translate(-50%, -50%) translateY(-10px); }
+        }
+
+        /* Title */
+        .app-title {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #a78bfa 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+
+        /* Loading */
+        .loading-container {
+            margin-top: 48px;
+        }
+
+        .loading-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border-radius: 50%;
+            animation: bounce 1.4s ease-in-out infinite both;
+        }
+
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+        .dot:nth-child(3) { animation-delay: 0; }
+
+        @keyframes bounce {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+        }
+
+        .loading-text {
+            margin-top: 24px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            letter-spacing: 0.5px;
+        }
+
+        /* Error state */
+        .error-container {
+            display: none;
+            margin-top: 32px;
+            padding: 16px 24px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .error-text {
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .retry-button {
+            padding: 8px 20px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .retry-button:hover {
+            background: rgba(239, 68, 68, 0.3);
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Background -->
+    <div class="background">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+
+    <!-- Splash Content -->
+    <div class="splash-container">
+        <!-- Logo -->
+        <div class="logo-container">
+            <div class="logo-glow"></div>
+            <svg class="logo" width="80" height="80" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L2 7V12C2 16.5 4.84 20.74 9 21.92C9.35 22.03 10.65 22.03 11 21.92C15.16 20.74 20 16.5 20 12V7L12 2Z"
+                      fill="url(#logo-gradient)"
+                      stroke="url(#logo-gradient-stroke)"
+                      stroke-width="1.5"/>
+                <path d="M7 12L10 15L17 8"
+                      stroke="white"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"/>
+                <defs>
+                    <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:0.2" />
+                        <stop offset="100%" style="stop-color:#a855f7;stop-opacity:0.3" />
+                    </linearGradient>
+                    <linearGradient id="logo-gradient-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+                    </linearGradient>
+                </defs>
+            </svg>
+        </div>
+
+        <!-- Title -->
+        <h1 class="app-title">TeleBoost</h1>
+
+        <!-- Loading -->
+        <div class="loading-container" id="loading">
+            <div class="loading-dots">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+            <div class="loading-text">Завантаження...</div>
+        </div>
+
+        <!-- Error (hidden by default) -->
+        <div class="error-container" id="error">
+            <div class="error-text">Не вдалося завантажити додаток</div>
+            <button class="retry-button" onclick="location.reload()">Спробувати знову</button>
+        </div>
+    </div>
+
+    <script>
+        // Ініціалізація Telegram Web App
+        if (window.Telegram?.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.expand();
+            tg.setHeaderColor('#1a0033');
+            tg.setBackgroundColor('#000000');
+            tg.ready();
+        }
+
+        // Функція перевірки авторизації
+        async function checkAuth() {
+            try {
+                // Затримка для показу splash screen (мінімум 1.5 секунди)
+                const startTime = Date.now();
+
+                // Перевіряємо localStorage
+                const authData = JSON.parse(localStorage.getItem('auth') || '{}');
+
+                // Якщо є токен - перевіряємо чи не прострочений
+                if (authData.access_token && authData.expires_at) {
+                    const expiresAt = new Date(authData.expires_at);
+
+                    if (expiresAt > new Date()) {
+                        // Токен валідний - перевіряємо з API
+                        try {
+                            const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/verify`, {
+                                headers: {
+                                    'Authorization': `Bearer ${authData.access_token}`
+                                }
+                            });
+
+                            const data = await response.json();
+
+                            if (data.success && data.data?.valid) {
+                                // Авторизований - чекаємо мінімум час показу splash
+                                const elapsed = Date.now() - startTime;
+                                const waitTime = Math.max(0, 1500 - elapsed);
+
+                                setTimeout(() => {
+                                    window.location.href = '/home';
+                                }, waitTime);
+                                return;
+                            }
+                        } catch (e) {
+                            console.error('Auth verify error:', e);
+                        }
+                    }
+
+                    // Токен прострочений - очищаємо
+                    localStorage.removeItem('auth');
+                }
+
+                // Не авторизований - на логін
+                const elapsed = Date.now() - startTime;
+                const waitTime = Math.max(0, 1500 - elapsed);
+
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, waitTime);
+
+            } catch (error) {
+                console.error('Splash screen error:', error);
+                // Показуємо помилку
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        // Запускаємо перевірку при завантаженні
+        window.addEventListener('DOMContentLoaded', checkAuth);
+
+        // Fallback - якщо через 5 секунд нічого не сталось
+        setTimeout(() => {
+            if (window.location.pathname === '/splash' || window.location.pathname === '/') {
+                window.location.href = '/login';
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

@@ -139,14 +139,14 @@ export default class AuthGuard {
    */
   renderError() {
     return `
-      <h2 class="auth-title">Access Error</h2>
+      <h2 class="auth-title">Помилка доступу</h2>
       <div class="auth-error-container">
         ${AlertIcon(20)}
         <p class="auth-error-text">${this.options.error}</p>
       </div>
       ${this.options.onRetry ? `
         <button class="auth-button" id="retry-button">
-          Try Again
+          Спробувати знову
         </button>
       ` : ''}
     `;
@@ -157,9 +157,9 @@ export default class AuthGuard {
    */
   renderLoading() {
     return `
-      <h2 class="auth-title">Authenticating</h2>
+      <h2 class="auth-title">Перевірка доступу</h2>
       <p class="auth-subtitle">
-        Verifying your access credentials...
+        Перевіряємо ваші дані авторизації...
       </p>
       <div class="auth-loader"></div>
     `;
@@ -170,12 +170,12 @@ export default class AuthGuard {
    */
   renderUnauthorized() {
     return `
-      <h2 class="auth-title">Authentication Required</h2>
+      <h2 class="auth-title">Потрібна авторизація</h2>
       <p class="auth-subtitle">
-        Please login to access this page
+        Будь ласка, увійдіть для доступу до цієї сторінки
       </p>
       <button class="auth-button" id="login-button">
-        Go to Login
+        Перейти до входу
       </button>
     `;
   }
@@ -195,10 +195,12 @@ export default class AuthGuard {
     // Додаємо обробники
     this.attachEventListeners();
 
-    // Анімація появи
-    setTimeout(() => {
-      this.element?.classList.add('auth-guard-active');
-    }, 10);
+    // Анімація появи з затримкою для плавності
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.element?.classList.add('auth-guard-active');
+      });
+    });
   }
 
   /**
@@ -206,7 +208,10 @@ export default class AuthGuard {
    */
   hide() {
     if (this.element) {
+      this.element.classList.add('auth-guard-hiding');
       this.element.classList.remove('auth-guard-active');
+
+      // Чекаємо завершення анімації
       setTimeout(() => {
         this.element?.remove();
         this.element = null;
@@ -258,7 +263,7 @@ export default class AuthGuard {
    */
   update(options) {
     Object.assign(this.options, options);
-    
+
     if (this.element) {
       // Перерендеримо
       this.element.innerHTML = this.render();
@@ -283,6 +288,7 @@ export default class AuthGuard {
       if (authData.expires_at) {
         const expiresAt = new Date(authData.expires_at);
         if (expiresAt <= new Date()) {
+          console.log('Token expired, clearing auth');
           localStorage.removeItem('auth');
           return { isAuthenticated: false, user: null };
         }
@@ -302,7 +308,7 @@ export default class AuthGuard {
 
       const data = await response.json();
 
-      if (data.success && data.data.valid) {
+      if (data.success && data.data?.valid && data.data?.user) {
         // Оновлюємо дані користувача
         authData.user = data.data.user;
         localStorage.setItem('auth', JSON.stringify(authData));
@@ -358,7 +364,7 @@ export async function requireAuth() {
     // Показуємо помилку
     authGuard.update({
       isLoading: false,
-      error: 'Failed to verify authentication',
+      error: 'Не вдалося перевірити авторизацію',
       onRetry: () => {
         window.location.reload();
       }
@@ -374,7 +380,7 @@ export function withAuth(ComponentClass) {
   return class extends ComponentClass {
     async init() {
       const { success, user } = await requireAuth();
-      
+
       if (success) {
         this.user = user;
         if (super.init) {
@@ -415,6 +421,15 @@ const styles = `
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 
@@ -474,6 +489,11 @@ const styles = `
 
 .auth-guard-container.auth-guard-active {
   opacity: 1;
+}
+
+.auth-guard-container.auth-guard-hiding {
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
 }
 
 /* Particles */

@@ -48,6 +48,7 @@ export class RealtimeService {
   handleAuthLogout() {
     this.stopAllSubscriptions();
     this.userId = null;
+    this.isConnected = false;
   }
 
   /**
@@ -408,6 +409,27 @@ export class RealtimeService {
     console.log(`Emulating ${event}:`, data);
     this.emit(event, data);
   }
+
+  /**
+   * Автоматичний старт при завантаженні
+   */
+  autoStart() {
+    try {
+      const auth = JSON.parse(localStorage.getItem('auth') || '{}');
+      if (auth.user?.id) {
+        this.userId = auth.user.id;
+        if (this.isSupabaseEnabled) {
+          this.startRealtimeSubscriptions();
+        } else {
+          // Емулюємо підключення
+          this.isConnected = true;
+          this.emit('connection:established');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to auto-start realtime:', e);
+    }
+  }
 }
 
 // Створюємо singleton
@@ -459,17 +481,7 @@ export const RealtimeSubscriptions = {
 // Auto-start якщо користувач вже авторизований
 if (typeof window !== 'undefined') {
   window.addEventListener('DOMContentLoaded', () => {
-    try {
-      const auth = JSON.parse(localStorage.getItem('auth') || '{}');
-      if (auth.user?.id) {
-        realtimeService.userId = auth.user.id;
-        if (realtimeService.isSupabaseEnabled) {
-          realtimeService.startRealtimeSubscriptions();
-        }
-      }
-    } catch (e) {
-      console.error('Failed to auto-start realtime:', e);
-    }
+    realtimeService.autoStart();
   });
 }
 

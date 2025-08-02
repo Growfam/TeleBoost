@@ -10,7 +10,6 @@ import Navigation from '/frontend/shared/components/Navigation.js';
 import { ToastProvider, useToast } from '/frontend/shared/components/Toast.js';
 import AuthGuard from '/frontend/shared/auth/AuthGuard.js';
 
-
 // Імпорти сервісів
 import { AuthAPI, ServicesAPI, OrdersAPI, StatsAPI } from '/frontend/shared/services/APIClient.js';
 import { realtimeService, RealtimeSubscriptions } from '/frontend/shared/services/RealtimeService.js';
@@ -45,6 +44,7 @@ class HomePage {
 
     this.components = {};
     this.subscriptions = [];
+    this.authGuard = null;
   }
 
   /**
@@ -52,19 +52,39 @@ class HomePage {
    */
   async init() {
     try {
+      // Показуємо loader під час перевірки авторизації
+      this.authGuard = new AuthGuard({
+        isLoading: true
+      });
+      this.authGuard.show();
+
       // Ініціалізуємо Telegram Web App
       this.initTelegram();
 
-      // ВИПРАВЛЕННЯ: Використовуємо AuthGuard для перевірки
+      // Перевіряємо авторизацію
       const authResult = await AuthGuard.check();
 
       if (!authResult.isAuthenticated) {
         console.log('User not authenticated, redirecting to login');
-        window.location.href = '/login';
+
+        // Оновлюємо AuthGuard щоб показати unauthorized стан
+        this.authGuard.update({
+          isLoading: false,
+          isAuthenticated: false
+        });
+
+        // Даємо час побачити анімацію перед редіректом
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1000);
         return;
       }
 
       this.state.user = authResult.user;
+
+      // Ховаємо AuthGuard
+      this.authGuard.hide();
+      this.authGuard = null;
 
       // Ініціалізуємо компоненти
       this.initComponents();
@@ -86,7 +106,17 @@ class HomePage {
 
     } catch (error) {
       console.error('Failed to initialize home page:', error);
-      this.showError('Помилка завантаження сторінки. Спробуйте оновити.');
+
+      // Показуємо помилку в AuthGuard
+      if (this.authGuard) {
+        this.authGuard.update({
+          isLoading: false,
+          error: 'Помилка завантаження сторінки',
+          onRetry: () => window.location.reload()
+        });
+      } else {
+        this.showError('Помилка завантаження сторінки. Спробуйте оновити.');
+      }
     }
   }
 
@@ -504,6 +534,11 @@ class HomePage {
    * Очищення при знищенні
    */
   destroy() {
+    // Закриваємо AuthGuard якщо відкритий
+    if (this.authGuard) {
+      this.authGuard.hide();
+    }
+
     // Відписуємося від усіх підписок
     this.subscriptions.forEach(unsubscribe => {
       if (typeof unsubscribe === 'function') {
@@ -536,5 +571,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Обробник виходу
   window.addEventListener('auth:logout', () => {
     window.location.href = '/login';
+  });
+
+  // Очищення при виході зі сторінки
+  window.addEventListener('beforeunload', () => {
+    if (window.homePage) {
+      window.homePage.destroy();
+    }
   });
 });

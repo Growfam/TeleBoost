@@ -20,7 +20,7 @@ export class APIClient {
    */
   loadTokens() {
     try {
-      // ВИПРАВЛЕННЯ: Читаємо з правильного ключа
+      // Читаємо з правильного ключа
       const auth = JSON.parse(localStorage.getItem('auth') || '{}');
       this.token = auth.access_token || null;
       this.refreshToken = auth.refresh_token || null;
@@ -157,6 +157,8 @@ export class APIClient {
     if (error.status === 401 || error.code === 'UNAUTHORIZED') {
       this.clearTokens();
       window.dispatchEvent(new CustomEvent('auth:logout'));
+      // Редірект на сторінку логіну
+      window.location.href = '/login';
     }
 
     throw error;
@@ -187,9 +189,10 @@ export class APIClient {
       }
       return response;
     }).catch(error => {
-      // При помилці оновлення - logout
+      // При помилці оновлення - logout і редірект
       this.clearTokens();
       window.dispatchEvent(new CustomEvent('auth:logout'));
+      window.location.href = '/login';
       throw error;
     }).finally(() => {
       this.isRefreshing = false;
@@ -265,6 +268,8 @@ export const AuthAPI = {
     }
     apiClient.clearTokens();
     window.dispatchEvent(new CustomEvent('auth:logout'));
+    // Редірект на логін
+    window.location.href = '/login';
   },
 
   async getMe() {
@@ -445,5 +450,12 @@ export const StatsAPI = {
     return apiClient.get('/statistics/live');
   }
 };
+
+// Обробники глобальних подій
+window.addEventListener('auth:logout', () => {
+  // Очищаємо всі дані і редіректимо на логін
+  apiClient.clearTokens();
+  window.location.href = '/login';
+});
 
 export default apiClient;
