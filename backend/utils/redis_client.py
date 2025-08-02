@@ -7,6 +7,7 @@ import redis
 import json
 import pickle
 import logging
+import socket
 from typing import Any, Optional, Union, List, Dict
 from datetime import timedelta
 
@@ -21,11 +22,22 @@ class RedisClient:
     def __init__(self):
         """Ініціалізація Redis підключення"""
         try:
+            # Форсуємо IPv4 для Railway
+            import socket
+            original_getaddrinfo = socket.getaddrinfo
+
+            def getaddrinfo_ipv4_only(host, port, family=0, type=0, proto=0, flags=0):
+                return original_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+
+            socket.getaddrinfo = getaddrinfo_ipv4_only
+
             # Парсимо Redis URL
             self.client = redis.from_url(
                 config.REDIS_URL,
                 decode_responses=config.REDIS_DECODE_RESPONSES,
                 max_connections=config.REDIS_MAX_CONNECTIONS,
+                socket_connect_timeout=10,
+                socket_timeout=10,
                 socket_keepalive=True,
                 socket_keepalive_options={
                     1: 1,  # TCP_KEEPIDLE
@@ -36,6 +48,10 @@ class RedisClient:
             # Тестуємо підключення
             self.client.ping()
             logger.info("✅ Redis connected successfully")
+
+            # Відновлюємо оригінальну функцію
+            socket.getaddrinfo = original_getaddrinfo
+
         except Exception as e:
             logger.error(f"❌ Redis connection failed: {e}")
             self.client = None
@@ -85,7 +101,7 @@ class RedisClient:
                 return default
             return self._deserialize(value, data_type)
         except Exception as e:
-            logger.error(f"Redis get error for key {key}: {e}")
+            logger.debug(f"Redis get error for key {key}: {e}")
             return default
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
@@ -100,7 +116,7 @@ class RedisClient:
             else:
                 return self.client.set(key, serialized)
         except Exception as e:
-            logger.error(f"Redis set error for key {key}: {e}")
+            logger.debug(f"Redis set error for key {key}: {e}")
             return False
 
     def delete(self, *keys: str) -> int:
@@ -111,7 +127,7 @@ class RedisClient:
         try:
             return self.client.delete(*keys)
         except Exception as e:
-            logger.error(f"Redis delete error: {e}")
+            logger.debug(f"Redis delete error: {e}")
             return 0
 
     def exists(self, *keys: str) -> int:
@@ -122,7 +138,7 @@ class RedisClient:
         try:
             return self.client.exists(*keys)
         except Exception as e:
-            logger.error(f"Redis exists error: {e}")
+            logger.debug(f"Redis exists error: {e}")
             return 0
 
     def expire(self, key: str, seconds: int) -> bool:
@@ -133,7 +149,7 @@ class RedisClient:
         try:
             return self.client.expire(key, seconds)
         except Exception as e:
-            logger.error(f"Redis expire error for key {key}: {e}")
+            logger.debug(f"Redis expire error for key {key}: {e}")
             return False
 
     def ttl(self, key: str) -> int:
@@ -144,7 +160,7 @@ class RedisClient:
         try:
             return self.client.ttl(key)
         except Exception as e:
-            logger.error(f"Redis ttl error for key {key}: {e}")
+            logger.debug(f"Redis ttl error for key {key}: {e}")
             return -2
 
     def incr(self, key: str, amount: int = 1) -> int:
@@ -155,7 +171,7 @@ class RedisClient:
         try:
             return self.client.incrby(key, amount)
         except Exception as e:
-            logger.error(f"Redis incr error for key {key}: {e}")
+            logger.debug(f"Redis incr error for key {key}: {e}")
             return 0
 
     def decr(self, key: str, amount: int = 1) -> int:
@@ -166,7 +182,7 @@ class RedisClient:
         try:
             return self.client.decrby(key, amount)
         except Exception as e:
-            logger.error(f"Redis decr error for key {key}: {e}")
+            logger.debug(f"Redis decr error for key {key}: {e}")
             return 0
 
     def hget(self, name: str, key: str, default: Any = None, data_type: str = 'auto') -> Any:
@@ -180,7 +196,7 @@ class RedisClient:
                 return default
             return self._deserialize(value, data_type)
         except Exception as e:
-            logger.error(f"Redis hget error for {name}:{key}: {e}")
+            logger.debug(f"Redis hget error for {name}:{key}: {e}")
             return default
 
     def hset(self, name: str, key: str, value: Any) -> bool:
@@ -192,7 +208,7 @@ class RedisClient:
             serialized = self._serialize(value)
             return self.client.hset(name, key, serialized)
         except Exception as e:
-            logger.error(f"Redis hset error for {name}:{key}: {e}")
+            logger.debug(f"Redis hset error for {name}:{key}: {e}")
             return False
 
     def hgetall(self, name: str, data_type: str = 'auto') -> Dict[str, Any]:
@@ -204,7 +220,7 @@ class RedisClient:
             data = self.client.hgetall(name)
             return {k: self._deserialize(v, data_type) for k, v in data.items()}
         except Exception as e:
-            logger.error(f"Redis hgetall error for {name}: {e}")
+            logger.debug(f"Redis hgetall error for {name}: {e}")
             return {}
 
     def hdel(self, name: str, *keys: str) -> int:
@@ -215,7 +231,7 @@ class RedisClient:
         try:
             return self.client.hdel(name, *keys)
         except Exception as e:
-            logger.error(f"Redis hdel error for {name}: {e}")
+            logger.debug(f"Redis hdel error for {name}: {e}")
             return 0
 
     def sadd(self, key: str, *values: Any) -> int:
@@ -227,7 +243,7 @@ class RedisClient:
             serialized = [self._serialize(v) for v in values]
             return self.client.sadd(key, *serialized)
         except Exception as e:
-            logger.error(f"Redis sadd error for {key}: {e}")
+            logger.debug(f"Redis sadd error for {key}: {e}")
             return 0
 
     def smembers(self, key: str, data_type: str = 'auto') -> set:
@@ -239,7 +255,7 @@ class RedisClient:
             members = self.client.smembers(key)
             return {self._deserialize(m, data_type) for m in members}
         except Exception as e:
-            logger.error(f"Redis smembers error for {key}: {e}")
+            logger.debug(f"Redis smembers error for {key}: {e}")
             return set()
 
     def srem(self, key: str, *values: Any) -> int:
@@ -251,7 +267,7 @@ class RedisClient:
             serialized = [self._serialize(v) for v in values]
             return self.client.srem(key, *serialized)
         except Exception as e:
-            logger.error(f"Redis srem error for {key}: {e}")
+            logger.debug(f"Redis srem error for {key}: {e}")
             return 0
 
     def zadd(self, key: str, mapping: Dict[Any, float]) -> int:
@@ -262,7 +278,7 @@ class RedisClient:
         try:
             return self.client.zadd(key, mapping)
         except Exception as e:
-            logger.error(f"Redis zadd error for {key}: {e}")
+            logger.debug(f"Redis zadd error for {key}: {e}")
             return 0
 
     def zcard(self, key: str) -> int:
@@ -273,7 +289,7 @@ class RedisClient:
         try:
             return self.client.zcard(key)
         except Exception as e:
-            logger.error(f"Redis zcard error for {key}: {e}")
+            logger.debug(f"Redis zcard error for {key}: {e}")
             return 0
 
     def zremrangebyscore(self, key: str, min: Any, max: Any) -> int:
@@ -284,7 +300,7 @@ class RedisClient:
         try:
             return self.client.zremrangebyscore(key, min, max)
         except Exception as e:
-            logger.error(f"Redis zremrangebyscore error for {key}: {e}")
+            logger.debug(f"Redis zremrangebyscore error for {key}: {e}")
             return 0
 
     def zrange(self, key: str, start: int, end: int, withscores: bool = False) -> list:
@@ -295,7 +311,7 @@ class RedisClient:
         try:
             return self.client.zrange(key, start, end, withscores=withscores)
         except Exception as e:
-            logger.error(f"Redis zrange error for {key}: {e}")
+            logger.debug(f"Redis zrange error for {key}: {e}")
             return []
 
     def keys(self, pattern: str) -> List[str]:
@@ -306,7 +322,7 @@ class RedisClient:
         try:
             return self.client.keys(pattern)
         except Exception as e:
-            logger.error(f"Redis keys error for pattern {pattern}: {e}")
+            logger.debug(f"Redis keys error for pattern {pattern}: {e}")
             return []
 
     def clear_pattern(self, pattern: str) -> int:
@@ -320,7 +336,7 @@ class RedisClient:
                 return self.delete(*keys)
             return 0
         except Exception as e:
-            logger.error(f"Redis clear pattern error: {e}")
+            logger.debug(f"Redis clear pattern error: {e}")
             return 0
 
     def flushdb(self) -> bool:
@@ -331,7 +347,7 @@ class RedisClient:
         try:
             return self.client.flushdb()
         except Exception as e:
-            logger.error(f"Redis flushdb error: {e}")
+            logger.debug(f"Redis flushdb error: {e}")
             return False
 
     def ping(self) -> bool:
@@ -355,7 +371,7 @@ class RedisClient:
         try:
             return pipe.execute()
         except Exception as e:
-            logger.error(f"Redis pipeline execute error: {e}")
+            logger.debug(f"Redis pipeline execute error: {e}")
             return []
 
     def setex(self, key: str, seconds: int, value: Any) -> bool:
@@ -367,7 +383,7 @@ class RedisClient:
             serialized = self._serialize(value)
             return self.client.setex(key, seconds, serialized)
         except Exception as e:
-            logger.error(f"Redis setex error for key {key}: {e}")
+            logger.debug(f"Redis setex error for key {key}: {e}")
             return False
 
     def lpush(self, key: str, *values: Any) -> int:
@@ -379,7 +395,7 @@ class RedisClient:
             serialized = [self._serialize(v) for v in values]
             return self.client.lpush(key, *serialized)
         except Exception as e:
-            logger.error(f"Redis lpush error for {key}: {e}")
+            logger.debug(f"Redis lpush error for {key}: {e}")
             return 0
 
     def rpush(self, key: str, *values: Any) -> int:
@@ -391,7 +407,7 @@ class RedisClient:
             serialized = [self._serialize(v) for v in values]
             return self.client.rpush(key, *serialized)
         except Exception as e:
-            logger.error(f"Redis rpush error for {key}: {e}")
+            logger.debug(f"Redis rpush error for {key}: {e}")
             return 0
 
     def lrange(self, key: str, start: int, end: int, data_type: str = 'auto') -> List[Any]:
@@ -403,7 +419,7 @@ class RedisClient:
             values = self.client.lrange(key, start, end)
             return [self._deserialize(v, data_type) for v in values]
         except Exception as e:
-            logger.error(f"Redis lrange error for {key}: {e}")
+            logger.debug(f"Redis lrange error for {key}: {e}")
             return []
 
     def llen(self, key: str) -> int:
@@ -414,7 +430,7 @@ class RedisClient:
         try:
             return self.client.llen(key)
         except Exception as e:
-            logger.error(f"Redis llen error for {key}: {e}")
+            logger.debug(f"Redis llen error for {key}: {e}")
             return 0
 
     def lpop(self, key: str, data_type: str = 'auto') -> Any:
@@ -428,7 +444,7 @@ class RedisClient:
                 return None
             return self._deserialize(value, data_type)
         except Exception as e:
-            logger.error(f"Redis lpop error for {key}: {e}")
+            logger.debug(f"Redis lpop error for {key}: {e}")
             return None
 
     def rpop(self, key: str, data_type: str = 'auto') -> Any:
@@ -442,7 +458,7 @@ class RedisClient:
                 return None
             return self._deserialize(value, data_type)
         except Exception as e:
-            logger.error(f"Redis rpop error for {key}: {e}")
+            logger.debug(f"Redis rpop error for {key}: {e}")
             return None
 
     def publish(self, channel: str, message: Any) -> int:
@@ -454,7 +470,7 @@ class RedisClient:
             serialized = self._serialize(message)
             return self.client.publish(channel, serialized)
         except Exception as e:
-            logger.error(f"Redis publish error for channel {channel}: {e}")
+            logger.debug(f"Redis publish error for channel {channel}: {e}")
             return 0
 
     def subscribe(self, *channels: str):
@@ -467,7 +483,7 @@ class RedisClient:
             pubsub.subscribe(*channels)
             return pubsub
         except Exception as e:
-            logger.error(f"Redis subscribe error: {e}")
+            logger.debug(f"Redis subscribe error: {e}")
             return None
 
 
