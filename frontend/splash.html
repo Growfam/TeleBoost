@@ -269,25 +269,64 @@
             tg.setHeaderColor('#1a0033');
             tg.setBackgroundColor('#000000');
             tg.ready();
+
+            // Логування для debug
+            if (window.CONFIG?.DEBUG) {
+                console.log('Telegram WebApp initialized:', {
+                    initData: tg.initData,
+                    user: tg.initDataUnsafe?.user,
+                    startParam: tg.initDataUnsafe?.start_param
+                });
+            }
         }
 
         // Функція перевірки авторизації
         async function checkAuth() {
             try {
-                // Затримка для показу splash screen (мінімум 1.5 секунди)
+                // Мінімальний час показу splash screen
+                const MINIMUM_SPLASH_TIME = 1500;
                 const startTime = Date.now();
 
-                // Перевіряємо localStorage
-                const authData = JSON.parse(localStorage.getItem('auth') || '{}');
+                // Перевіряємо чи користувач відкрив додаток через Telegram
+                const isInTelegram = window.Telegram?.WebApp?.initData;
 
-                // Якщо є токен - перевіряємо чи не прострочений
-                if (authData.access_token && authData.expires_at) {
+                // Логування для debug
+                console.log('Checking auth...', {
+                    isInTelegram: !!isInTelegram,
+                    hasLocalStorage: !!localStorage
+                });
+
+                // Спробуємо отримати дані авторизації з localStorage
+                let authData = null;
+                try {
+                    const storedAuth = localStorage.getItem('auth');
+                    if (storedAuth) {
+                        authData = JSON.parse(storedAuth);
+                    }
+                } catch (e) {
+                    console.error('Failed to parse auth data:', e);
+                    localStorage.removeItem('auth');
+                }
+
+                // Перевіряємо валідність токена
+                const hasValidToken = !!(
+                    authData?.access_token &&
+                    authData.access_token !== 'undefined' &&
+                    authData.access_token !== 'null' &&
+                    authData.expires_at
+                );
+
+                if (hasValidToken) {
                     const expiresAt = new Date(authData.expires_at);
+                    const now = new Date();
 
-                    if (expiresAt > new Date()) {
-                        // Токен валідний - перевіряємо з API
+                    if (expiresAt > now) {
+                        // Токен ще дійсний - пробуємо перевірити на сервері
+                        console.log('Found valid token, verifying...');
+
                         try {
                             const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/verify`, {
+                                method: 'GET',
                                 headers: {
                                     'Authorization': `Bearer ${authData.access_token}`
                                 }
@@ -295,32 +334,35 @@
 
                             const data = await response.json();
 
-                            if (data.success && data.data?.valid) {
-                                // Авторизований - чекаємо мінімум час показу splash
-                                const elapsed = Date.now() - startTime;
-                                const waitTime = Math.max(0, 1500 - elapsed);
-
-                                setTimeout(() => {
-                                    window.location.href = '/home';
-                                }, waitTime);
+                            if (response.ok && data.success && data.data?.valid) {
+                                // Авторизований - йдемо на головну
+                                console.log('Token verified, redirecting to home...');
+                                await waitAndRedirect('/home', startTime, MINIMUM_SPLASH_TIME);
+                                return;
+                            } else {
+                                // Токен недійсний - очищаємо
+                                console.log('Token invalid:', data.error);
+                                localStorage.removeItem('auth');
+                            }
+                        } catch (error) {
+                            // Помилка мережі - якщо токен не прострочений, все одно йдемо на home
+                            console.error('Network error during verification:', error);
+                            if (expiresAt > new Date(Date.now() + 60000)) { // Якщо токен дійсний ще хоча б хвилину
+                                await waitAndRedirect('/home', startTime, MINIMUM_SPLASH_TIME);
                                 return;
                             }
-                        } catch (e) {
-                            console.error('Auth verify error:', e);
+                            localStorage.removeItem('auth');
                         }
+                    } else {
+                        // Токен прострочений
+                        console.log('Token expired');
+                        localStorage.removeItem('auth');
                     }
-
-                    // Токен прострочений - очищаємо
-                    localStorage.removeItem('auth');
                 }
 
-                // Не авторизований - на логін
-                const elapsed = Date.now() - startTime;
-                const waitTime = Math.max(0, 1500 - elapsed);
-
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, waitTime);
+                // Не авторизований або токен недійсний - на сторінку логіну
+                console.log('No valid auth, redirecting to login...');
+                await waitAndRedirect('/login', startTime, MINIMUM_SPLASH_TIME);
 
             } catch (error) {
                 console.error('Splash screen error:', error);
@@ -330,15 +372,46 @@
             }
         }
 
+        // Функція для очікування і редіректу
+        async function waitAndRedirect(path, startTime, minTime) {
+            const elapsed = Date.now() - startTime;
+            const waitTime = Math.max(0, minTime - elapsed);
+
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    window.location.href = path;
+                    resolve();
+                }, waitTime);
+            });
+        }
+
         // Запускаємо перевірку при завантаженні
-        window.addEventListener('DOMContentLoaded', checkAuth);
+        window.addEventListener('DOMContentLoaded', () => {
+            // Якщо вже є Telegram Web App data, запускаємо одразу
+            if (window.Telegram?.WebApp?.initData) {
+                checkAuth();
+            } else {
+                // Інакше чекаємо трохи на ініціалізацію
+                setTimeout(checkAuth, 100);
+            }
+        });
 
         // Fallback - якщо через 5 секунд нічого не сталось
         setTimeout(() => {
-            if (window.location.pathname === '/splash' || window.location.pathname === '/') {
+            if (window.location.pathname === '/splash' || window.location.pathname === '/frontend/splash.html') {
+                console.log('Fallback redirect to login');
                 window.location.href = '/login';
             }
         }, 5000);
+
+        // Обробка помилок
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
+        });
     </script>
 </body>
 </html>
