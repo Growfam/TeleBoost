@@ -4,8 +4,8 @@
  * Управляє всією логікою авторизації в додатку
  */
 
-import { apiClient, AuthAPI } from './APIClient.js';
-import { userCache } from './CacheService.js';
+import { apiClient, AuthAPI } from '/frontend/shared/services/APIClient.js';
+import { userCache } from '/frontend/shared/services/CacheService.js';
 
 class AuthService {
   constructor() {
