@@ -14,7 +14,10 @@ class Config:
 
     # Environment
     ENV = os.getenv('ENVIRONMENT', 'development')
-    DEBUG = ENV == 'development'
+
+    # DEBUG вимкнено для production
+    DEBUG = os.getenv('DEBUG', 'false').lower() == 'true' if ENV == 'production' else ENV == 'development'
+
     TESTING = ENV == 'testing'
 
     # Flask
@@ -142,8 +145,8 @@ class Config:
     SUPPORTED_CURRENCIES = ['USD', 'UAH', 'EUR', 'USDT']
     EXCHANGE_RATES_UPDATE_INTERVAL = 3600  # 1 година
 
-    # Logging
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO' if not DEBUG else 'DEBUG')
+    # Logging - INFO для production
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')  # Завжди INFO для production, не DEBUG
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     LOG_FILE = os.getenv('LOG_FILE', 'teleboost.log')
     LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
@@ -244,7 +247,11 @@ class Config:
             missing.append('At least one payment provider')
 
         if missing:
-            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+            # Не виводимо конкретні назви змінних у production
+            if cls.ENV == 'production':
+                raise ValueError("Missing required environment variables")
+            else:
+                raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 
         # Validate URLs
         for url_name, url_value in [('BACKEND_URL', cls.BACKEND_URL), ('FRONTEND_URL', cls.FRONTEND_URL)]:
@@ -303,6 +310,13 @@ class Config:
         """Отримати адресу для виведення"""
         key = f"{currency}_{network}".upper()
         return cls.WITHDRAWAL_ADDRESSES.get(key)
+
+    @classmethod
+    def mask_sensitive_value(cls, value: str, visible_chars: int = 4) -> str:
+        """Маскувати чутливе значення для безпечного виведення"""
+        if not value or len(value) <= visible_chars * 2:
+            return '***'
+        return f"{value[:visible_chars]}...{value[-visible_chars:]}"
 
 
 # Створюємо екземпляр конфігурації

@@ -50,14 +50,14 @@ class NakrutochkaAPI:
                 timeout=30
             )
 
-            # Log request for debugging
+            # Log request without sensitive data
             logger.debug(f"API Request: {action} - Status: {response.status_code}")
 
             # Parse response
             try:
                 result = response.json()
             except json.JSONDecodeError:
-                logger.error(f"Invalid JSON response: {response.text}")
+                logger.error(f"Invalid JSON response")
                 return {'error': 'Invalid API response'}
 
             # Check for API errors
@@ -71,7 +71,7 @@ class NakrutochkaAPI:
             logger.error("API request timeout")
             return {'error': 'Request timeout'}
         except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed: {e}")
+            logger.error(f"API request failed: {type(e).__name__}")
             return {'error': str(e)}
 
     def get_services(self) -> List[Dict]:
@@ -81,7 +81,7 @@ class NakrutochkaAPI:
         result = self._make_request('services')
 
         if isinstance(result, dict) and 'error' in result:
-            logger.error(f"Failed to fetch services: {result['error']}")
+            logger.error("Failed to fetch services")
             return []
 
         if not isinstance(result, list):
@@ -122,7 +122,7 @@ class NakrutochkaAPI:
                 services.append(processed_service)
 
             except (ValueError, KeyError) as e:
-                logger.warning(f"Error processing service: {e}")
+                logger.warning(f"Error processing service")
                 continue
 
         logger.info(f"Fetched {len(services)} services")
@@ -130,7 +130,7 @@ class NakrutochkaAPI:
 
     def create_order(self, service_id: int, link: str, quantity: int = None, **kwargs) -> Dict:
         """Create new order"""
-        logger.info(f"Creating order: service={service_id}, link={link}, quantity={quantity}")
+        logger.info(f"Creating order: service={service_id}, quantity={quantity}")
 
         data = {
             'service': service_id,
@@ -159,14 +159,14 @@ class NakrutochkaAPI:
 
         if isinstance(result, dict):
             if 'error' in result:
-                logger.error(f"Order creation failed: {result['error']}")
+                logger.error("Order creation failed")
                 return {
                     'success': False,
                     'error': result['error']
                 }
 
             if 'order' in result:
-                logger.info(f"Order created successfully: {result['order']}")
+                logger.info(f"Order created successfully: ID {result['order']}")
                 return {
                     'success': True,
                     'order_id': result['order'],
@@ -180,13 +180,13 @@ class NakrutochkaAPI:
 
     def get_order_status(self, order_id: Union[int, str]) -> Dict:
         """Get single order status"""
-        logger.info(f"Getting status for order: {order_id}")
+        logger.debug(f"Getting status for order: {order_id}")
 
         result = self._make_request('status', {'order': order_id})
 
         if isinstance(result, dict):
             if 'error' in result:
-                logger.error(f"Failed to get order status: {result['error']}")
+                logger.error("Failed to get order status")
                 return {
                     'success': False,
                     'error': result['error']
@@ -224,7 +224,7 @@ class NakrutochkaAPI:
 
     def get_multiple_order_status(self, order_ids: List[Union[int, str]]) -> Dict:
         """Get status for multiple orders"""
-        logger.info(f"Getting status for {len(order_ids)} orders")
+        logger.debug(f"Getting status for {len(order_ids)} orders")
 
         # Convert list to comma-separated string
         orders_str = ','.join(map(str, order_ids))
@@ -268,7 +268,7 @@ class NakrutochkaAPI:
 
     def get_refill_status(self, refill_id: Union[int, str]) -> Dict:
         """Get refill status"""
-        logger.info(f"Getting refill status: {refill_id}")
+        logger.debug(f"Getting refill status: {refill_id}")
 
         result = self._make_request('refill_status', {'refill': refill_id})
 
@@ -311,7 +311,7 @@ class NakrutochkaAPI:
 
     def get_balance(self) -> Dict:
         """Get account balance"""
-        logger.info("Getting Nakrutochka account balance")
+        logger.debug("Getting account balance")
 
         result = self._make_request('balance')
 

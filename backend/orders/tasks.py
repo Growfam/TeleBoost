@@ -20,10 +20,10 @@ def sync_active_orders():
     """
     Синхронізувати всі активні замовлення з Nakrutochka API
 
-    Запускати кожні 5 хвилин через cron або celery
+    Запускати кожні 10 хвилин через cron або celery (замість 5)
     """
     try:
-        logger.info("Starting active orders sync...")
+        logger.debug("Starting active orders sync...")
 
         # Отримуємо всі активні замовлення
         active_statuses = [
@@ -38,7 +38,7 @@ def sync_active_orders():
             .execute()
 
         if not result.data:
-            logger.info("No active orders to sync")
+            logger.debug("No active orders to sync")
             return
 
         # Групуємо по 100 для batch запитів
@@ -58,18 +58,10 @@ def sync_active_orders():
                 total_synced += successful
                 total_errors += errors
 
-                logger.info(
-                    f"Synced batch {i // batch_size + 1}: "
-                    f"{successful}/{len(order_ids)} orders"
-                )
-
                 if errors > 0:
                     logger.warning(f"Failed to sync {errors} orders in batch")
 
-        logger.info(
-            f"Active orders sync completed. "
-            f"Total synced: {total_synced}, Errors: {total_errors}"
-        )
+        logger.info(f"Active orders sync completed. Synced: {total_synced}")
 
         # Зберігаємо час останньої синхронізації
         redis_client.set('orders:last_sync', datetime.utcnow().isoformat(), ttl=3600)
@@ -80,9 +72,9 @@ def sync_active_orders():
         redis_client.hset('orders:sync_stats', 'total_errors', total_errors)
 
     except Exception as e:
-        logger.error(f"Error syncing active orders: {e}")
+        logger.error(f"Error syncing active orders: {type(e).__name__}")
         # Зберігаємо помилку в Redis для моніторингу
-        redis_client.hset('orders:sync_stats', 'last_error', str(e))
+        redis_client.hset('orders:sync_stats', 'last_error', str(type(e).__name__))
         redis_client.hset('orders:sync_stats', 'last_error_time', datetime.utcnow().isoformat())
 
 
@@ -90,13 +82,13 @@ def check_stuck_orders():
     """
     Перевірити "застряглі" замовлення та оновити їх статус
 
-    Запускати кожні 30 хвилин
+    Запускати кожну годину (замість 30 хвилин)
     """
     try:
-        logger.info("Checking for stuck orders...")
+        logger.debug("Checking for stuck orders...")
 
-        # Замовлення в статусі pending більше 30 хвилин
-        threshold_time = datetime.utcnow() - timedelta(minutes=30)
+        # Замовлення в статусі pending більше 1 години (замість 30 хвилин)
+        threshold_time = datetime.utcnow() - timedelta(hours=1)
 
         result = supabase.table('orders') \
             .select('*') \
@@ -119,49 +111,46 @@ def check_stuck_orders():
                         # Якщо не вдалося - позначаємо як failed
                         order.update_status(OrderStatus.FAILED)
                         failed_count += 1
-                        logger.error(f"Failed to update stuck order {order.id}")
+                        logger.error(f"Failed to update stuck order")
                 else:
-                    # Немає external_id після 30 хв - щось пішло не так
+                    # Немає external_id після години - щось пішло не так
                     order.update_status(OrderStatus.FAILED)
                     failed_count += 1
 
                     # Повертаємо кошти користувачу
                     _refund_failed_order(order)
-                    logger.warning(f"Refunded stuck order {order.id} without external ID")
+                    logger.warning(f"Refunded stuck order without external ID")
 
                 stuck_count += 1
 
-            logger.info(
-                f"Stuck orders check completed. "
-                f"Processed: {stuck_count}, Failed: {failed_count}"
-            )
+            logger.info(f"Stuck orders check completed. Processed: {stuck_count}")
         else:
-            logger.info("No stuck orders found")
+            logger.debug("No stuck orders found")
 
     except Exception as e:
-        logger.error(f"Error checking stuck orders: {e}")
+        logger.error(f"Error checking stuck orders: {type(e).__name__}")
 
 
 def update_completed_orders_stats():
     """
     Оновити статистику для завершених замовлень
 
-    Запускати раз на годину
+    Запускати кожні 2 години (замість 1)
     """
     try:
-        logger.info("Updating completed orders statistics...")
+        logger.debug("Updating completed orders statistics...")
 
-        # Отримуємо замовлення завершені за останню годину
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+        # Отримуємо замовлення завершені за останні 2 години
+        two_hours_ago = datetime.utcnow() - timedelta(hours=2)
 
         result = supabase.table('orders') \
             .select('user_id, charge, service_id') \
             .eq('status', OrderStatus.COMPLETED) \
-            .gt('updated_at', one_hour_ago.isoformat()) \
+            .gt('updated_at', two_hours_ago.isoformat()) \
             .execute()
 
         if not result.data:
-            logger.info("No recently completed orders")
+            logger.debug("No recently completed orders")
             return
 
         # Групуємо по користувачах
@@ -193,23 +182,16 @@ def update_completed_orders_stats():
 
                 if result.data is True:
                     updated_users += 1
-                    logger.info(
-                        f"Updated stats for user {user_id}: "
-                        f"+${stats['total_spent']:.2f} from {stats['order_count']} orders"
-                    )
                 else:
-                    logger.error(f"Failed to update stats for user {user_id}")
+                    logger.error(f"Failed to update stats for user")
 
             except Exception as e:
-                logger.error(f"Error updating stats for user {user_id}: {e}")
+                logger.error(f"Error updating stats: {type(e).__name__}")
 
-        logger.info(
-            f"Completed orders statistics update finished. "
-            f"Updated {updated_users}/{len(user_stats)} users"
-        )
+        logger.info(f"Updated stats for {updated_users} users")
 
     except Exception as e:
-        logger.error(f"Error updating completed orders stats: {e}")
+        logger.error(f"Error updating completed orders stats: {type(e).__name__}")
 
 
 def cleanup_old_cancelled_orders():
@@ -219,7 +201,7 @@ def cleanup_old_cancelled_orders():
     Запускати раз на тиждень
     """
     try:
-        logger.info("Starting cleanup of old cancelled orders...")
+        logger.debug("Starting cleanup of old cancelled orders...")
 
         # Видаляємо metadata для скасованих замовлень старше 30 днів
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
@@ -238,33 +220,33 @@ def cleanup_old_cancelled_orders():
             redis_client.hset('orders:cleanup_stats', 'last_run', datetime.utcnow().isoformat())
             redis_client.hset('orders:cleanup_stats', 'cleaned_count', cleaned_count)
         else:
-            logger.info("No old cancelled orders to clean up")
+            logger.debug("No old cancelled orders to clean up")
 
     except Exception as e:
-        logger.error(f"Error during cleanup: {e}")
-        redis_client.hset('orders:cleanup_stats', 'last_error', str(e))
+        logger.error(f"Error during cleanup: {type(e).__name__}")
+        redis_client.hset('orders:cleanup_stats', 'last_error', str(type(e).__name__))
 
 
 def send_order_notifications():
     """
     Відправити сповіщення про зміни статусів замовлень
 
-    Запускати кожні 10 хвилин
+    Запускати кожні 30 хвилин (замість 10)
     """
     try:
-        logger.info("Checking for order notifications...")
+        logger.debug("Checking for order notifications...")
 
         # Отримуємо замовлення зі зміненими статусами
-        ten_minutes_ago = datetime.utcnow() - timedelta(minutes=10)
+        thirty_minutes_ago = datetime.utcnow() - timedelta(minutes=30)
 
         result = supabase.table('orders') \
             .select('id, user_id, status, service_id, metadata') \
-            .gt('updated_at', ten_minutes_ago.isoformat()) \
+            .gt('updated_at', thirty_minutes_ago.isoformat()) \
             .in_('status', [OrderStatus.COMPLETED, OrderStatus.FAILED, OrderStatus.CANCELLED]) \
             .execute()
 
         if not result.data:
-            logger.info("No orders requiring notifications")
+            logger.debug("No orders requiring notifications")
             return
 
         notifications_sent = 0
@@ -280,15 +262,13 @@ def send_order_notifications():
                 redis_client.set(notification_key, "sent", ttl=86400)  # 24 години
                 notifications_sent += 1
 
-                logger.info(
-                    f"Notification queued for order {order_data['id']} "
-                    f"with status {order_data['status']}"
-                )
+                logger.debug(f"Notification queued for order with status {order_data['status']}")
 
-        logger.info(f"Order notifications check completed. Sent: {notifications_sent}")
+        if notifications_sent > 0:
+            logger.info(f"Order notifications sent: {notifications_sent}")
 
     except Exception as e:
-        logger.error(f"Error sending notifications: {e}")
+        logger.error(f"Error sending notifications: {type(e).__name__}")
 
 
 def check_orders_integrity():
@@ -298,7 +278,7 @@ def check_orders_integrity():
     Запускати раз на добу
     """
     try:
-        logger.info("Starting orders integrity check...")
+        logger.debug("Starting orders integrity check...")
 
         issues_found = 0
 
@@ -311,15 +291,13 @@ def check_orders_integrity():
 
         if result.data:
             issues_found += len(result.data)
-            logger.warning(
-                f"Found {len(result.data)} orders in PROCESSING status without external ID"
-            )
+            logger.warning(f"Found {len(result.data)} orders in PROCESSING without external ID")
 
             for order in result.data:
-                # Якщо замовлення старше 1 години - позначаємо як failed
+                # Якщо замовлення старше 2 годин - позначаємо як failed
                 created_at = datetime.fromisoformat(order['created_at'].replace('Z', '+00:00'))
-                if datetime.utcnow().replace(tzinfo=created_at.tzinfo) - created_at > timedelta(hours=1):
-                    logger.error(f"Marking orphaned order {order['id']} as failed")
+                if datetime.utcnow().replace(tzinfo=created_at.tzinfo) - created_at > timedelta(hours=2):
+                    logger.error(f"Marking orphaned order as failed")
                     # Тут можна додати оновлення статусу
 
         # 2. Перевірка невідповідності статусів
@@ -332,18 +310,17 @@ def check_orders_integrity():
 
         if result.data:
             issues_found += len(result.data)
-            logger.warning(
-                f"Found {len(result.data)} completed orders with remaining quantity"
-            )
+            logger.warning(f"Found {len(result.data)} completed orders with remaining quantity")
 
         # Зберігаємо результати перевірки
         redis_client.hset('orders:integrity_check', 'last_run', datetime.utcnow().isoformat())
         redis_client.hset('orders:integrity_check', 'issues_found', issues_found)
 
-        logger.info(f"Orders integrity check completed. Issues found: {issues_found}")
+        if issues_found > 0:
+            logger.info(f"Orders integrity check found {issues_found} issues")
 
     except Exception as e:
-        logger.error(f"Error during integrity check: {e}")
+        logger.error(f"Error during integrity check: {type(e).__name__}")
 
 
 def _refund_failed_order(order: Order):
@@ -376,7 +353,7 @@ def _refund_failed_order(order: Order):
                     'amount': refund_amount,
                     'balance_before': current_balance - refund_amount,
                     'balance_after': current_balance,
-                    'description': f'Automatic refund for failed order #{order.id[:8]}',
+                    'description': f'Automatic refund for failed order',
                     'metadata': {
                         'order_id': order.id,
                         'reason': 'order_failed'
@@ -385,19 +362,19 @@ def _refund_failed_order(order: Order):
 
                 supabase.create_transaction(transaction_data)
 
-                logger.info(f"Refunded ${refund_amount:.2f} for failed order {order.id}")
+                logger.info(f"Refunded ${refund_amount:.2f} for failed order")
             else:
-                logger.error(f"Failed to refund order {order.id}")
+                logger.error(f"Failed to refund order")
 
     except Exception as e:
-        logger.error(f"Error refunding failed order {order.id}: {e}")
+        logger.error(f"Error refunding failed order: {type(e).__name__}")
 
 
 # Функції для інтеграції з планувальником (Celery, APScheduler, etc)
 
 def register_order_tasks(scheduler):
     """
-    Реєстрація задач в планувальнику
+    Реєстрація задач в планувальнику з оптимізованими інтервалами
 
     Приклад для APScheduler:
     ```python
@@ -408,31 +385,31 @@ def register_order_tasks(scheduler):
     scheduler.start()
     ```
     """
-    # Синхронізація активних замовлень кожні 5 хвилин
+    # Синхронізація активних замовлень кожні 10 хвилин (замість 5)
     scheduler.add_job(
         sync_active_orders,
         'interval',
-        minutes=5,
+        minutes=10,
         id='sync_active_orders',
         replace_existing=True,
         max_instances=1  # Тільки один екземпляр одночасно
     )
 
-    # Перевірка застряглих замовлень кожні 30 хвилин
+    # Перевірка застряглих замовлень кожну годину (замість 30 хвилин)
     scheduler.add_job(
         check_stuck_orders,
         'interval',
-        minutes=30,
+        hours=1,
         id='check_stuck_orders',
         replace_existing=True,
         max_instances=1
     )
 
-    # Оновлення статистики щогодини
+    # Оновлення статистики кожні 2 години (замість 1)
     scheduler.add_job(
         update_completed_orders_stats,
         'interval',
-        hours=1,
+        hours=2,
         id='update_completed_orders_stats',
         replace_existing=True,
         max_instances=1
@@ -450,11 +427,11 @@ def register_order_tasks(scheduler):
         max_instances=1
     )
 
-    # Сповіщення кожні 10 хвилин
+    # Сповіщення кожні 30 хвилин (замість 10)
     scheduler.add_job(
         send_order_notifications,
         'interval',
-        minutes=10,
+        minutes=30,
         id='send_order_notifications',
         replace_existing=True,
         max_instances=1
@@ -471,7 +448,7 @@ def register_order_tasks(scheduler):
         max_instances=1
     )
 
-    logger.info("Order tasks registered successfully")
+    logger.info("Order tasks registered with optimized intervals")
 
 
 def get_task_status() -> Dict[str, Any]:
@@ -486,5 +463,5 @@ def get_task_status() -> Dict[str, Any]:
 
         return stats
     except Exception as e:
-        logger.error(f"Error getting task status: {e}")
+        logger.error(f"Error getting task status: {type(e).__name__}")
         return {}

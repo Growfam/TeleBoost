@@ -52,7 +52,7 @@ def create_access_token(user_data: Dict[str, Any]) -> str:
         ttl=int(config.JWT_ACCESS_TOKEN_EXPIRES.total_seconds())
     )
 
-    logger.info(f"Created access token for user {user_data['telegram_id']}")
+    logger.debug(f"Created access token for user {user_data['telegram_id']}")
 
     return token
 
@@ -91,7 +91,7 @@ def create_refresh_token(user_data: Dict[str, Any]) -> str:
         ttl=int(config.JWT_REFRESH_TOKEN_EXPIRES.total_seconds())
     )
 
-    logger.info(f"Created refresh token for user {user_data['telegram_id']}")
+    logger.debug(f"Created refresh token for user {user_data['telegram_id']}")
 
     return token
 
@@ -141,26 +141,26 @@ def decode_token(token: str, verify_exp: bool = True) -> Tuple[bool, Optional[Di
             redis_key = f"jwt:{jti}" if token_type == 'access' else f"jwt:refresh:{jti}"
 
             if not redis_client.exists(redis_key):
-                logger.warning(f"Token {jti} has been revoked")
+                logger.debug(f"Token has been revoked")
                 return False, None
 
         # Перевіряємо обов'язкові поля
         required_fields = ['user_id', 'telegram_id', 'type']
         for field in required_fields:
             if field not in payload:
-                logger.error(f"Missing required field in token: {field}")
+                logger.debug(f"Missing required field in token")
                 return False, None
 
         return True, payload
 
     except jwt.ExpiredSignatureError:
-        logger.warning("Token has expired")
+        logger.debug("Token has expired")
         return False, None
-    except jwt.InvalidTokenError as e:
-        logger.error(f"Invalid token: {e}")
+    except jwt.InvalidTokenError:
+        logger.debug("Invalid token")
         return False, None
     except Exception as e:
-        logger.error(f"Token decode error: {e}")
+        logger.error(f"Token decode error: {type(e).__name__}")
         return False, None
 
 
@@ -182,7 +182,7 @@ def refresh_access_token(refresh_token: str) -> Optional[Dict[str, str]]:
 
     # Перевіряємо тип токена
     if payload.get('type') != 'refresh':
-        logger.error("Not a refresh token")
+        logger.debug("Not a refresh token")
         return None
 
     # Отримуємо користувача з БД для актуальних даних
@@ -190,11 +190,11 @@ def refresh_access_token(refresh_token: str) -> Optional[Dict[str, str]]:
     user = User.get_by_id(payload['user_id'])
 
     if not user:
-        logger.error(f"User {payload['user_id']} not found")
+        logger.debug(f"User not found")
         return None
 
     if not user.is_active:
-        logger.warning(f"User {user.telegram_id} is not active")
+        logger.debug(f"User is not active")
         return None
 
     # Створюємо новий access token
@@ -235,11 +235,11 @@ def revoke_token(token: str) -> bool:
 
         redis_client.delete(redis_key)
 
-        logger.info(f"Revoked token {jti}")
+        logger.debug(f"Revoked token")
         return True
 
     except Exception as e:
-        logger.error(f"Error revoking token: {e}")
+        logger.error(f"Error revoking token: {type(e).__name__}")
         return False
 
 

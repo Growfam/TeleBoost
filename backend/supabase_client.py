@@ -22,7 +22,8 @@ class SupabaseClient:
         """Ініціалізація Supabase клієнта"""
         self._client = None
         self._last_connection_check = 0
-        self._connection_check_interval = 60  # секунд
+        self._connection_check_interval = 300  # 5 хвилин замість 60 секунд
+        self._is_connected = False
 
         try:
             if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_KEY:
@@ -35,11 +36,13 @@ class SupabaseClient:
 
             # Тестуємо з'єднання
             self._test_initial_connection()
+            self._is_connected = True
             logger.info("✅ Supabase connected successfully")
 
         except Exception as e:
-            logger.error(f"❌ Supabase connection failed: {e}")
+            logger.error(f"❌ Supabase connection failed: {type(e).__name__}")
             self._client = None
+            self._is_connected = False
 
     def _test_initial_connection(self):
         """Початкова перевірка з'єднання"""
@@ -52,22 +55,24 @@ class SupabaseClient:
         if not self._client:
             return None
 
-        # Періодична перевірка з'єднання (БЕЗ рекурсії!)
+        # Періодична перевірка з'єднання (без рекурсії)
         current_time = time.time()
         if current_time - self._last_connection_check > self._connection_check_interval:
+            self._last_connection_check = current_time
             # Безпосередньо перевіряємо з'єднання без виклику test_connection
             try:
                 self._client.table('users').select('id').limit(1).execute()
-                self._last_connection_check = current_time
+                self._is_connected = True
             except Exception as e:
-                logger.warning(f"Lost connection to Supabase: {e}")
+                logger.warning(f"Lost connection to Supabase: {type(e).__name__}")
+                self._is_connected = False
                 return None
 
         return self._client
 
     def table(self, table_name: str):
         """Отримати референс на таблицю з перевіркою"""
-        if not self._client:  # Перевіряємо _client напряму, а не через властивість
+        if not self._client:  # Перевіряємо _client напряму
             raise ConnectionError("Supabase client not initialized")
         return self._client.table(table_name)
 
@@ -76,13 +81,13 @@ class SupabaseClient:
         if not self._client:  # Перевіряємо _client напряму
             raise ConnectionError("Supabase client not initialized")
 
-        logger.debug(f"Calling RPC: {function_name} with params: {params}")
+        logger.debug(f"Calling RPC: {function_name}")
 
         try:
             result = self._client.rpc(function_name, params or {})
             return result
         except Exception as e:
-            logger.error(f"RPC call failed: {function_name}, error: {e}")
+            logger.error(f"RPC call failed: {function_name}, error: {type(e).__name__}")
             raise
 
     @contextmanager
@@ -92,19 +97,21 @@ class SupabaseClient:
         # Але ми готуємо інтерфейс для майбутнього
         yield self
 
-    # === Test Connection Method (FIXED) ===
+    # === Test Connection Method (FIXED - NO RECURSION) ===
 
     def test_connection(self) -> bool:
-        """Тестувати з'єднання"""
+        """Тестувати з'єднання (БЕЗ РЕКУРСІЇ)"""
         if not self._client:  # Перевіряємо _client напряму
             return False
 
         try:
-            # Простий запит для перевірки БЕЗ виклику self.table()
+            # Простий запит для перевірки БЕЗ виклику self.table() або self.client
             self._client.table('users').select('id').limit(1).execute()
+            self._is_connected = True
             return True
         except Exception as e:
-            logger.error(f"Connection test failed: {e}")
+            logger.error(f"Connection test failed: {type(e).__name__}")
+            self._is_connected = False
             return False
 
     # === User Methods ===
@@ -116,7 +123,7 @@ class SupabaseClient:
             return result.data
         except Exception as e:
             if "No rows found" not in str(e):
-                logger.error(f"Error getting user by telegram_id {telegram_id}: {e}")
+                logger.error(f"Error getting user by telegram_id: {type(e).__name__}")
             return None
 
     def create_user(self, user_data: Dict) -> Optional[Dict]:
@@ -137,12 +144,12 @@ class SupabaseClient:
             result = self.table('users').insert(user_data).execute()
 
             if result.data:
-                logger.info(f"Created user: {user_data.get('telegram_id')}")
+                logger.info(f"Created user")
                 return result.data[0]
             return None
 
         except Exception as e:
-            logger.error(f"Error creating user: {e}")
+            logger.error(f"Error creating user: {type(e).__name__}")
             return None
 
     def update_user(self, user_id: str, update_data: Dict) -> Optional[Dict]:
@@ -153,15 +160,15 @@ class SupabaseClient:
             result = self.table('users').update(update_data).eq('id', user_id).execute()
 
             if result.data:
-                logger.info(f"Updated user {user_id}")
+                logger.debug(f"Updated user")
                 return result.data[0]
             return None
 
         except Exception as e:
-            logger.error(f"Error updating user {user_id}: {e}")
+            logger.error(f"Error updating user: {type(e).__name__}")
             return None
 
-    # === Balance Methods (ВИПРАВЛЕНО) ===
+    # === Balance Methods ===
 
     def get_user_balance(self, user_id: str) -> float:
         """Отримати баланс користувача"""
@@ -169,21 +176,21 @@ class SupabaseClient:
             result = self.table('users').select('balance').eq('id', user_id).single().execute()
             return float(result.data.get('balance', 0)) if result.data else 0.0
         except Exception as e:
-            logger.error(f"Error getting balance for user {user_id}: {e}")
+            logger.error(f"Error getting balance: {type(e).__name__}")
             return 0.0
 
     def update_user_balance(self, user_id: str, amount: float, operation: str = 'add') -> bool:
-        """Оновити баланс користувача (ВИПРАВЛЕНО)"""
+        """Оновити баланс користувача"""
         try:
             # Правильний формат параметрів для RPC
             if operation == 'add':
                 result = self.rpc('increment_balance', {
-                    'user_id': user_id,  # Правильна назва параметра
+                    'user_id': user_id,
                     'amount': amount
                 }).execute()
             else:  # subtract
                 result = self.rpc('decrement_balance', {
-                    'user_id': user_id,  # Правильна назва параметра
+                    'user_id': user_id,
                     'amount': amount
                 }).execute()
 
@@ -191,14 +198,14 @@ class SupabaseClient:
             success = result.data is True if result.data is not None else False
 
             if success:
-                logger.info(f"Balance updated for user {user_id}: {operation} {amount}")
+                logger.debug(f"Balance updated")
             else:
-                logger.warning(f"Balance update failed for user {user_id}")
+                logger.warning(f"Balance update failed")
 
             return success
 
         except Exception as e:
-            logger.error(f"Error updating balance for user {user_id}: {e}")
+            logger.error(f"Error updating balance: {type(e).__name__}")
             return False
 
     # === Transaction Methods ===
@@ -217,13 +224,12 @@ class SupabaseClient:
             result = self.table('transactions').insert(transaction_data).execute()
 
             if result.data:
-                logger.info(f"Created transaction for user {transaction_data.get('user_id')}: "
-                            f"{transaction_data.get('type')} {transaction_data.get('amount')}")
+                logger.debug(f"Created transaction: {transaction_data.get('type')}")
                 return result.data[0]
             return None
 
         except Exception as e:
-            logger.error(f"Error creating transaction: {e}")
+            logger.error(f"Error creating transaction: {type(e).__name__}")
             return None
 
     def get_user_transactions(self, user_id: str, limit: int = 50, offset: int = 0,
@@ -244,7 +250,7 @@ class SupabaseClient:
             return result.data or []
 
         except Exception as e:
-            logger.error(f"Error getting transactions for user {user_id}: {e}")
+            logger.error(f"Error getting transactions: {type(e).__name__}")
             return []
 
     # === Order Methods ===
@@ -263,7 +269,7 @@ class SupabaseClient:
 
             if result.data:
                 order = result.data[0]
-                logger.info(f"Created order {order['id']} for user {order_data.get('user_id')}")
+                logger.debug(f"Created order")
 
                 # Оновлюємо статистику користувача
                 self.rpc('update_user_stats', {'p_user_id': order_data['user_id']}).execute()
@@ -272,7 +278,7 @@ class SupabaseClient:
             return None
 
         except Exception as e:
-            logger.error(f"Error creating order: {e}")
+            logger.error(f"Error creating order: {type(e).__name__}")
             return None
 
     def get_order(self, order_id: str) -> Optional[Dict]:
@@ -282,7 +288,7 @@ class SupabaseClient:
             return result.data
         except Exception as e:
             if "No rows found" not in str(e):
-                logger.error(f"Error getting order {order_id}: {e}")
+                logger.error(f"Error getting order: {type(e).__name__}")
             return None
 
     def update_order(self, order_id: str, update_data: Dict) -> Optional[Dict]:
@@ -294,7 +300,7 @@ class SupabaseClient:
 
             if result.data:
                 order = result.data[0]
-                logger.info(f"Updated order {order_id}: status={update_data.get('status')}")
+                logger.debug(f"Updated order: status={update_data.get('status')}")
 
                 # Оновлюємо статистику користувача якщо змінився статус
                 if 'status' in update_data:
@@ -304,7 +310,7 @@ class SupabaseClient:
             return None
 
         except Exception as e:
-            logger.error(f"Error updating order {order_id}: {e}")
+            logger.error(f"Error updating order: {type(e).__name__}")
             return None
 
     def get_user_orders(self, user_id: str, status: Optional[str] = None,
@@ -325,7 +331,7 @@ class SupabaseClient:
             return result.data or []
 
         except Exception as e:
-            logger.error(f"Error getting orders for user {user_id}: {e}")
+            logger.error(f"Error getting orders: {type(e).__name__}")
             return []
 
     # === Payment Methods ===
@@ -343,12 +349,12 @@ class SupabaseClient:
             result = self.table('payments').insert(payment_data).execute()
 
             if result.data:
-                logger.info(f"Created payment {result.data[0]['id']} for user {payment_data.get('user_id')}")
+                logger.debug(f"Created payment")
                 return result.data[0]
             return None
 
         except Exception as e:
-            logger.error(f"Error creating payment: {e}")
+            logger.error(f"Error creating payment: {type(e).__name__}")
             return None
 
     def get_payment(self, payment_id: str) -> Optional[Dict]:
@@ -358,7 +364,7 @@ class SupabaseClient:
             return result.data
         except Exception as e:
             if "No rows found" not in str(e):
-                logger.error(f"Error getting payment {payment_id}: {e}")
+                logger.error(f"Error getting payment: {type(e).__name__}")
             return None
 
     def get_payment_by_provider_id(self, provider_id: str, provider: str) -> Optional[Dict]:
@@ -373,7 +379,7 @@ class SupabaseClient:
             return result.data
         except Exception as e:
             if "No rows found" not in str(e):
-                logger.error(f"Error getting payment by provider_id {provider_id}: {e}")
+                logger.error(f"Error getting payment by provider_id: {type(e).__name__}")
             return None
 
     def update_payment(self, payment_id: str, update_data: Dict) -> Optional[Dict]:
@@ -384,12 +390,12 @@ class SupabaseClient:
             result = self.table('payments').update(update_data).eq('id', payment_id).execute()
 
             if result.data:
-                logger.info(f"Updated payment {payment_id}: status={update_data.get('status')}")
+                logger.debug(f"Updated payment: status={update_data.get('status')}")
                 return result.data[0]
             return None
 
         except Exception as e:
-            logger.error(f"Error updating payment {payment_id}: {e}")
+            logger.error(f"Error updating payment: {type(e).__name__}")
             return None
 
     # === Service Methods ===
@@ -406,7 +412,7 @@ class SupabaseClient:
             return result.data or []
 
         except Exception as e:
-            logger.error(f"Error getting services: {e}")
+            logger.error(f"Error getting services: {type(e).__name__}")
             return []
 
     def get_service(self, service_id: int) -> Optional[Dict]:
@@ -416,7 +422,7 @@ class SupabaseClient:
             return result.data
         except Exception as e:
             if "No rows found" not in str(e):
-                logger.error(f"Error getting service {service_id}: {e}")
+                logger.error(f"Error getting service: {type(e).__name__}")
             return None
 
     def upsert_service(self, service_data: Dict) -> Optional[Dict]:
@@ -431,12 +437,12 @@ class SupabaseClient:
             result = self.table('services').upsert(service_data).execute()
 
             if result.data:
-                logger.info(f"Upserted service {service_data.get('id')}")
+                logger.debug(f"Upserted service")
                 return result.data[0]
             return None
 
         except Exception as e:
-            logger.error(f"Error upserting service: {e}")
+            logger.error(f"Error upserting service: {type(e).__name__}")
             return None
 
     def deactivate_services(self, service_ids: List[int]) -> bool:
@@ -447,14 +453,14 @@ class SupabaseClient:
                 .in_('id', service_ids) \
                 .execute()
 
-            logger.info(f"Deactivated {len(service_ids)} services")
+            logger.debug(f"Deactivated {len(service_ids)} services")
             return True
 
         except Exception as e:
-            logger.error(f"Error deactivating services: {e}")
+            logger.error(f"Error deactivating services: {type(e).__name__}")
             return False
 
-    # === Referral Methods (ВИПРАВЛЕНО) ===
+    # === Referral Methods ===
 
     def create_referral(self, referrer_id: str, referred_id: str, level: int = 1) -> Optional[Dict]:
         """Створити реферальний зв'язок"""
@@ -472,12 +478,12 @@ class SupabaseClient:
             result = self.table('referrals').insert(referral_data).execute()
 
             if result.data:
-                logger.info(f"Created referral: {referrer_id} -> {referred_id} (level {level})")
+                logger.debug(f"Created referral: level {level}")
                 return result.data[0]
             return None
 
         except Exception as e:
-            logger.error(f"Error creating referral: {e}")
+            logger.error(f"Error creating referral: {type(e).__name__}")
             return None
 
     def get_referrals_by_level(self, referrer_id: str, level: int) -> List[Dict]:
@@ -495,11 +501,11 @@ class SupabaseClient:
             return result.data or []
 
         except Exception as e:
-            logger.error(f"Error getting referrals by level: {e}")
+            logger.error(f"Error getting referrals by level: {type(e).__name__}")
             return []
 
     def update_referral_stats(self, referral_id: str, deposit_amount: float, bonus_amount: float) -> bool:
-        """Оновити статистику реферала після депозиту (ВИПРАВЛЕНО)"""
+        """Оновити статистику реферала після депозиту"""
         try:
             # Оновлюємо total_deposits
             deposits_result = self.rpc('increment_value', {
@@ -527,12 +533,12 @@ class SupabaseClient:
             success = bool(deposits_result.data and bonuses_result.data and update_result.data)
 
             if success:
-                logger.info(f"Updated referral stats {referral_id}: deposit={deposit_amount}, bonus={bonus_amount}")
+                logger.debug(f"Updated referral stats")
 
             return success
 
         except Exception as e:
-            logger.error(f"Error updating referral stats: {e}")
+            logger.error(f"Error updating referral stats: {type(e).__name__}")
             return False
 
     def get_user_referrals(self, user_id: str) -> List[Dict]:
@@ -557,7 +563,7 @@ class SupabaseClient:
             return referrals
 
         except Exception as e:
-            logger.error(f"Error getting referrals for user {user_id}: {e}")
+            logger.error(f"Error getting referrals: {type(e).__name__}")
             return []
 
     def get_referral_stats(self, user_id: str) -> Dict:
@@ -581,7 +587,7 @@ class SupabaseClient:
             }
 
         except Exception as e:
-            logger.error(f"Error getting referral stats for user {user_id}: {e}")
+            logger.error(f"Error getting referral stats: {type(e).__name__}")
             return {'count': 0, 'total_earned': 0, 'referrals': []}
 
     def get_referral_by_users(self, referrer_id: str, referred_id: str) -> Optional[Dict]:
@@ -598,7 +604,7 @@ class SupabaseClient:
 
         except Exception as e:
             if "No rows found" not in str(e):
-                logger.error(f"Error getting referral by users: {e}")
+                logger.error(f"Error getting referral by users: {type(e).__name__}")
             return None
 
     def get_referral_chain(self, user_id: str) -> Dict[str, List[Dict]]:
@@ -626,13 +632,13 @@ class SupabaseClient:
             }
 
         except Exception as e:
-            logger.error(f"Error getting referral chain: {e}")
+            logger.error(f"Error getting referral chain: {type(e).__name__}")
             return {'level1': [], 'level2': []}
 
     def process_referral_bonus_transaction(self, referrer_id: str, amount: float,
                                            referred_user_id: str, deposit_amount: float,
                                            level: int) -> bool:
-        """Обробити реферальний бонус в одній транзакції (ВИПРАВЛЕНО)"""
+        """Обробити реферальний бонус в одній транзакції"""
         try:
             result = self.rpc('process_referral_bonus', {
                 'p_referrer_id': referrer_id,
@@ -645,14 +651,14 @@ class SupabaseClient:
             success = bool(result.data)
 
             if success:
-                logger.info(f"Processed referral bonus: {referrer_id} <- {amount} (level {level})")
+                logger.debug(f"Processed referral bonus: level {level}")
             else:
-                logger.error(f"Failed to process referral bonus: {result}")
+                logger.error(f"Failed to process referral bonus")
 
             return success
 
         except Exception as e:
-            logger.error(f"Error in referral bonus transaction: {e}")
+            logger.error(f"Error in referral bonus transaction: {type(e).__name__}")
             return False
 
     # === Helper Methods ===
@@ -664,7 +670,7 @@ class SupabaseClient:
             return result.data
         except Exception as e:
             if "No rows found" not in str(e):
-                logger.error(f"Error getting user by id {user_id}: {e}")
+                logger.error(f"Error getting user by id: {type(e).__name__}")
             return None
 
     # === Activity Methods ===
@@ -683,7 +689,7 @@ class SupabaseClient:
             return bool(result.data)
 
         except Exception as e:
-            logger.error(f"Error logging user activity: {e}")
+            logger.error(f"Error logging user activity: {type(e).__name__}")
             return False
 
     # === Notification Methods ===
@@ -705,12 +711,12 @@ class SupabaseClient:
             result = self.table('user_notifications').insert(notification_data).execute()
 
             if result.data:
-                logger.info(f"Created notification for user {user_id}: {title}")
+                logger.debug(f"Created notification")
                 return True
             return False
 
         except Exception as e:
-            logger.error(f"Error creating notification: {e}")
+            logger.error(f"Error creating notification: {type(e).__name__}")
             return False
 
     # === Admin Methods ===
@@ -730,12 +736,12 @@ class SupabaseClient:
             result = self.table('admin_actions').insert(action_data).execute()
 
             if result.data:
-                logger.info(f"Admin action logged: {admin_id} -> {action}")
+                logger.info(f"Admin action logged: {action}")
                 return True
             return False
 
         except Exception as e:
-            logger.error(f"Error logging admin action: {e}")
+            logger.error(f"Error logging admin action: {type(e).__name__}")
             return False
 
     # === Batch Operations ===
@@ -752,12 +758,12 @@ class SupabaseClient:
                 .execute()
 
             updated_count = len(result.data or [])
-            logger.info(f"Batch updated {updated_count} orders to status {new_status}")
+            logger.debug(f"Batch updated {updated_count} orders")
 
             return updated_count
 
         except Exception as e:
-            logger.error(f"Error in batch update orders: {e}")
+            logger.error(f"Error in batch update orders: {type(e).__name__}")
             return 0
 
     # === Statistics Methods ===
@@ -782,7 +788,7 @@ class SupabaseClient:
             return stats
 
         except Exception as e:
-            logger.error(f"Error getting system stats: {e}")
+            logger.error(f"Error getting system stats: {type(e).__name__}")
             return {}
 
 

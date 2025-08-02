@@ -16,6 +16,39 @@ from backend.supabase_client import supabase
 from backend.utils.redis_client import redis_client
 from backend.middleware import init_middleware
 
+
+# Налаштування логування з фільтрацією
+class SensitiveDataFilter(logging.Filter):
+    """Фільтр для видалення чутливих даних з логів"""
+
+    def filter(self, record):
+        # Фільтруємо повідомлення з чутливими даними
+        sensitive_patterns = [
+            'Bearer ', 'eyJ', 'apikey', 'authorization',
+            'password', 'secret', 'token', 'key'
+        ]
+
+        msg = str(record.getMessage()).lower()
+        for pattern in sensitive_patterns:
+            if pattern.lower() in msg:
+                # Маскуємо чутливі дані
+                record.msg = self._mask_sensitive_data(record.msg)
+                break
+
+        return True
+
+    def _mask_sensitive_data(self, msg):
+        """Маскування чутливих даних"""
+        import re
+        # Маскуємо JWT токени
+        msg = re.sub(r'eyJ[\w\-\.]+', 'eyJ***', str(msg))
+        # Маскуємо Bearer токени
+        msg = re.sub(r'Bearer\s+[\w\-\.]+', 'Bearer ***', msg)
+        # Маскуємо API ключі
+        msg = re.sub(r'(apikey|key|token|secret)[\"\']?\s*[:=]\s*[\"\']?[\w\-]+', r'\1=***', msg, flags=re.IGNORECASE)
+        return msg
+
+
 # Налаштування логування
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL),
@@ -24,6 +57,22 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),
     ]
 )
+
+# Додаємо фільтр для чутливих даних
+sensitive_filter = SensitiveDataFilter()
+for handler in logging.root.handlers:
+    handler.addFilter(sensitive_filter)
+
+# Вимикаємо DEBUG логування для зовнішніх бібліотек
+logging.getLogger('hpack').setLevel(logging.WARNING)
+logging.getLogger('hpack.hpack').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('httpcore.http2').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('apscheduler').setLevel(logging.INFO)
+logging.getLogger('apscheduler.scheduler').setLevel(logging.INFO)
+logging.getLogger('apscheduler.executors').setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
@@ -630,8 +679,7 @@ def init_services():
             from backend.api.nakrutochka_api import nakrutochka
             balance = nakrutochka.get_balance()
             if balance.get('success'):
-                logger.info(
-                    f"✅ Nakrutochka API connected (Balance: {balance.get('balance')} {balance.get('currency')})")
+                logger.info("✅ Nakrutochka API connected")
             else:
                 logger.warning("⚠️ Nakrutochka API connection failed")
         except Exception as e:
@@ -661,8 +709,7 @@ def init_services():
         logger.info(f"Redis: {'✅ Connected' if redis_client and redis_client.ping() else '⚠️ Not available'}")
         logger.info(f"Middleware: ✅ All systems initialized")
         logger.info(f"Frontend: ✅ Static files serving enabled")
-        logger.info(
-            f"Referral System: ✅ Two-level (L1: {config.REFERRAL_BONUS_PERCENT}%, L2: {config.REFERRAL_BONUS_LEVEL2_PERCENT}%)")
+        logger.info(f"Referral System: ✅ Two-level")
         logger.info("=" * 50)
 
     except Exception as e:
@@ -738,7 +785,7 @@ if __name__ == '__main__':
         logger.info(f"   - Auth: ✅ JWT + Telegram Web App")
         logger.info(f"   - Cache: ✅ Redis caching enabled")
         logger.info(f"   - Performance: ✅ Monitoring active")
-        logger.info(f"   - Referrals: ✅ Two-level system (7% + 2.5%)")
+        logger.info(f"   - Referrals: ✅ Two-level system")
         logger.info(f"   - Payments: ✅ CryptoBot + NOWPayments")
         logger.info(f"   - Orders: ✅ Full order management system")
         logger.info(f"   - Scheduler: {'✅ Background tasks active' if scheduler else '⚠️ Background tasks disabled'}")
