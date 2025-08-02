@@ -4,6 +4,7 @@ import { generalCache, ordersCache, userCache } from './CacheService.js';
 
 /**
  * Сервіс для управління real-time оновленнями через Supabase
+ * З підтримкою режиму без Supabase
  */
 export class RealtimeService {
   constructor() {
@@ -13,10 +14,17 @@ export class RealtimeService {
     this.isConnected = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
+    this.isSupabaseEnabled = window.CONFIG?.FEATURES?.REALTIME || false;
 
     // Підписуємось на події авторизації
     window.addEventListener('auth:login', (e) => this.handleAuthLogin(e.detail));
     window.addEventListener('auth:logout', () => this.handleAuthLogout());
+
+    // Логування стану
+    console.log('RealtimeService initialized:', {
+      supabaseEnabled: this.isSupabaseEnabled,
+      features: window.CONFIG?.FEATURES
+    });
   }
 
   /**
@@ -24,7 +32,14 @@ export class RealtimeService {
    */
   handleAuthLogin(authData) {
     this.userId = authData.user.id;
-    this.startRealtimeSubscriptions();
+    if (this.isSupabaseEnabled) {
+      this.startRealtimeSubscriptions();
+    } else {
+      console.log('Realtime features disabled - Supabase not configured');
+      // Емулюємо підключення для UI
+      this.isConnected = true;
+      this.emit('connection:established');
+    }
   }
 
   /**
@@ -39,7 +54,9 @@ export class RealtimeService {
    * Запустити всі підписки
    */
   startRealtimeSubscriptions() {
-    if (!this.userId) return;
+    if (!this.userId || !this.isSupabaseEnabled) return;
+
+    console.log('Starting realtime subscriptions for user:', this.userId);
 
     // Підписка на зміни користувача
     this.subscribeToUserUpdates();
@@ -54,10 +71,14 @@ export class RealtimeService {
     this.subscribeToNotifications();
 
     // Підписка на presence (онлайн статус)
-    this.subscribeToPresence();
+    if (window.CONFIG?.FEATURES?.PRESENCE) {
+      this.subscribeToPresence();
+    }
 
     // Підписка на системні повідомлення
-    this.subscribeToSystemBroadcast();
+    if (window.CONFIG?.FEATURES?.BROADCAST) {
+      this.subscribeToSystemBroadcast();
+    }
 
     this.isConnected = true;
   }
@@ -79,6 +100,8 @@ export class RealtimeService {
    * Підписка на оновлення користувача
    */
   subscribeToUserUpdates() {
+    if (!this.isSupabaseEnabled) return;
+
     const unsubscribe = Tables.users.subscribe((payload) => {
       console.log('User update:', payload);
 
@@ -107,6 +130,8 @@ export class RealtimeService {
    * Підписка на замовлення
    */
   subscribeToOrders() {
+    if (!this.isSupabaseEnabled) return;
+
     const unsubscribe = Tables.orders.subscribe((payload) => {
       console.log('Order update:', payload);
 
@@ -140,6 +165,8 @@ export class RealtimeService {
    * Підписка на транзакції
    */
   subscribeToTransactions() {
+    if (!this.isSupabaseEnabled) return;
+
     const unsubscribe = Tables.transactions.subscribe((payload) => {
       console.log('Transaction update:', payload);
 
@@ -162,6 +189,8 @@ export class RealtimeService {
    * Підписка на сповіщення
    */
   subscribeToNotifications() {
+    if (!this.isSupabaseEnabled) return;
+
     const unsubscribe = Tables.notifications.subscribe((payload) => {
       console.log('New notification:', payload);
 
@@ -180,6 +209,8 @@ export class RealtimeService {
    * Підписка на presence (хто онлайн)
    */
   subscribeToPresence() {
+    if (!this.isSupabaseEnabled || !window.CONFIG?.FEATURES?.PRESENCE) return;
+
     const presence = subscribeToPresence('online_users', {
       onSync: () => {
         const state = presence.getState();
@@ -208,6 +239,8 @@ export class RealtimeService {
    * Підписка на системні broadcast повідомлення
    */
   subscribeToSystemBroadcast() {
+    if (!this.isSupabaseEnabled || !window.CONFIG?.FEATURES?.BROADCAST) return;
+
     // Системні оповіщення
     const systemBroadcast = subscribeToBroadcast('system', 'announcement', (data) => {
       this.emit('system:announcement', data);
@@ -229,6 +262,11 @@ export class RealtimeService {
    * Підписатись на статус конкретного замовлення
    */
   subscribeToOrderStatus(orderId, callback) {
+    if (!this.isSupabaseEnabled) {
+      console.warn('Order status subscription not available - Supabase disabled');
+      return () => {};
+    }
+
     const key = `order_status_${orderId}`;
 
     // Якщо вже підписані - не дублюємо
@@ -255,12 +293,7 @@ export class RealtimeService {
   showNotificationToast(notification) {
     // Викликаємо глобальний toast (буде реалізовано в Toast.js)
     if (window.showToast) {
-      window.showToast({
-        type: 'info',
-        title: notification.title,
-        message: notification.message,
-        duration: 5000
-      });
+      window.showToast(notification.message || notification.title, 'info');
     }
   }
 
@@ -321,6 +354,10 @@ export class RealtimeService {
    * Перевірити з'єднання
    */
   checkConnection() {
+    if (!this.isSupabaseEnabled) {
+      // Завжди повертаємо true якщо Supabase вимкнено
+      return true;
+    }
     return this.isConnected && supabase.realtime.isConnected();
   }
 
@@ -328,6 +365,11 @@ export class RealtimeService {
    * Переконектитись
    */
   async reconnect() {
+    if (!this.isSupabaseEnabled) {
+      console.log('Reconnect skipped - Supabase disabled');
+      return;
+    }
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('Max reconnection attempts reached');
       this.emit('connection:failed');
@@ -352,6 +394,19 @@ export class RealtimeService {
         this.reconnect();
       }
     }, delay);
+  }
+
+  /**
+   * Емулювати оновлення (для тестування без Supabase)
+   */
+  emulateUpdate(event, data) {
+    if (this.isSupabaseEnabled) {
+      console.warn('Emulation not available when Supabase is enabled');
+      return;
+    }
+
+    console.log(`Emulating ${event}:`, data);
+    this.emit(event, data);
   }
 }
 
@@ -402,16 +457,25 @@ export const RealtimeSubscriptions = {
 };
 
 // Auto-start якщо користувач вже авторизований
-if (localStorage.getItem('auth')) {
-  try {
-    const auth = JSON.parse(localStorage.getItem('auth'));
-    if (auth.user?.id) {
-      realtimeService.userId = auth.user.id;
-      realtimeService.startRealtimeSubscriptions();
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    try {
+      const auth = JSON.parse(localStorage.getItem('auth') || '{}');
+      if (auth.user?.id) {
+        realtimeService.userId = auth.user.id;
+        if (realtimeService.isSupabaseEnabled) {
+          realtimeService.startRealtimeSubscriptions();
+        }
+      }
+    } catch (e) {
+      console.error('Failed to auto-start realtime:', e);
     }
-  } catch (e) {
-    console.error('Failed to auto-start realtime:', e);
-  }
+  });
+}
+
+// Експортуємо для тестування
+if (window.CONFIG?.DEBUG) {
+  window.realtimeService = realtimeService;
 }
 
 export default realtimeService;

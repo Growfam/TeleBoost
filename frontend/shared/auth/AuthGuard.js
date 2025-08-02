@@ -288,8 +288,13 @@ export default class AuthGuard {
         }
       }
 
-      // Верифікуємо токен з API
-      const response = await fetch('/api/auth/verify', {
+      // Якщо є збережений користувач - повертаємо його
+      if (authData.user) {
+        return { isAuthenticated: true, user: authData.user };
+      }
+
+      // Інакше верифікуємо токен з API
+      const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/verify`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -298,6 +303,10 @@ export default class AuthGuard {
       const data = await response.json();
 
       if (data.success && data.data.valid) {
+        // Оновлюємо дані користувача
+        authData.user = data.data.user;
+        localStorage.setItem('auth', JSON.stringify(authData));
+
         return { isAuthenticated: true, user: data.data.user };
       }
 

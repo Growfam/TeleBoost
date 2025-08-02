@@ -8,7 +8,8 @@
 import Header from '/frontend/shared/components/Header.js';
 import Navigation from '/frontend/shared/components/Navigation.js';
 import { ToastProvider, useToast } from '/frontend/shared/components/Toast.js';
-import { AuthGuard } from '/frontend/shared/auth/TelegramAuth.js';
+import AuthGuard from '/frontend/shared/auth/AuthGuard.js';
+
 
 // Імпорти сервісів
 import { AuthAPI, ServicesAPI, OrdersAPI, StatsAPI } from '/frontend/shared/services/APIClient.js';

@@ -234,7 +234,7 @@ export class TelegramAuth {
     this.options = {
       onSuccess: options.onSuccess || (() => {}),
       onError: options.onError || (() => {}),
-      botUsername: options.botUsername || 'TeleeBoost_bot',
+      botUsername: options.botUsername || window.CONFIG?.BOT_USERNAME || 'TeleeBoost_bot',
       buttonText: options.buttonText || 'Увійти через Telegram',
       showUserInfo: options.showUserInfo !== false,
       autoLogin: options.autoLogin !== false
@@ -444,7 +444,7 @@ export class TelegramAuth {
       }
 
       // Відправляємо на backend
-      const response = await fetch('/api/auth/telegram', {
+      const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/telegram`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -572,7 +572,7 @@ export const useTelegramAuth = () => {
         return;
       }
 
-      const response = await fetch('/api/auth/verify', {
+      const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/verify`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -619,45 +619,5 @@ export const useTelegramAuth = () => {
     checkAuth
   };
 };
-
-/**
- * AuthGuard компонент для захисту сторінок
- */
-export class AuthGuard {
-  static async check() {
-    try {
-      const authData = JSON.parse(localStorage.getItem('auth') || '{}');
-      const token = authData.access_token;
-
-      if (!token) {
-        return { isAuthenticated: false, user: null };
-      }
-
-      const response = await fetch('/api/auth/verify', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.data.valid) {
-        return { isAuthenticated: true, user: data.data.user };
-      }
-
-      // Токен невалідний - очищаємо
-      localStorage.removeItem('auth');
-      return { isAuthenticated: false, user: null };
-
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      return { isAuthenticated: false, user: null };
-    }
-  }
-
-  static redirectToLogin() {
-    window.location.href = '/login';
-  }
-}
 
 export default TelegramAuth;

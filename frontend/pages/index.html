@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeleBoost - Перенаправлення...</title>
+
+    <!-- Global Configuration -->
+    <script src="/frontend/config.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .loader {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 20px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #a855f7;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .loader-text {
+            font-size: 16px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="loader">
+        <div class="spinner"></div>
+        <div class="loader-text">Перенаправлення...</div>
+    </div>
+
+    <script>
+        // Перевіряємо авторизацію та редіректимо
+        (function() {
+            try {
+                const authData = JSON.parse(localStorage.getItem('auth') || '{}');
+
+                // Перевіряємо наявність токена
+                if (authData.access_token) {
+                    // Перевіряємо чи не прострочений
+                    if (authData.expires_at) {
+                        const expiresAt = new Date(authData.expires_at);
+                        if (expiresAt > new Date()) {
+                            // Авторизований - йдемо на home
+                            window.location.href = '/frontend/pages/home/home.html';
+                            return;
+                        }
+                    }
+                }
+
+                // Не авторизований - йдемо на login
+                window.location.href = '/frontend/pages/login/login.html';
+
+            } catch (e) {
+                console.error('Redirect error:', e);
+                // При помилці - йдемо на login
+                window.location.href = '/frontend/pages/login/login.html';
+            }
+        })();
+    </script>
+</body>
+</html>

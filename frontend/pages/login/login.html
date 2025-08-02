@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TeleBoost - Вхід</title>
+
+    <!-- Preload fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <!-- Global styles -->
+    <link rel="stylesheet" href="/frontend/shared/ui/theme.css">
+    <link rel="stylesheet" href="/frontend/shared/ui/glassmorphism.css">
+    <link rel="stylesheet" href="/frontend/shared/ui/animations.css">
+
+    <!-- Page specific styles -->
+    <link rel="stylesheet" href="/frontend/pages/login/login.css">
+
+    <!-- Telegram Web App -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- Global Configuration -->
+    <script src="/frontend/config.js"></script>
+</head>
+<body>
+    <!-- Background effects -->
+    <div class="background-wrapper">
+        <div class="background-gradient"></div>
+        <div class="floating-orbs">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="orb orb-3"></div>
+        </div>
+
+        <!-- Animated particles -->
+        <div class="particles-container">
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+            <div class="particle"></div>
+        </div>
+    </div>
+
+    <!-- Main container -->
+    <div class="container">
+        <!-- Logo section -->
+        <div class="logo-section animate-fadeInDown">
+            <div class="logo-container">
+                <div class="logo-glow"></div>
+                <svg class="logo-svg" width="80" height="80" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L2 7V12C2 16.5 4.84 20.74 9 21.92C9.35 22.03 10.65 22.03 11 21.92C16.16 20.74 20 16.5 20 12V7L12 2Z"
+                          fill="url(#logo-gradient)"
+                          stroke="url(#logo-gradient-stroke)"
+                          stroke-width="1.5"/>
+                    <path d="M7 12L10 15L17 8"
+                          stroke="white"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"/>
+                    <defs>
+                        <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:0.2" />
+                            <stop offset="100%" style="stop-color:#a855f7;stop-opacity:0.3" />
+                        </linearGradient>
+                        <linearGradient id="logo-gradient-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <h1 class="app-title">TeleBoost</h1>
+            <p class="app-subtitle">Професійне просування в Telegram</p>
+        </div>
+
+        <!-- Auth container -->
+        <div id="auth-container" class="auth-container animate-fadeInUp">
+            <!-- Telegram Auth component will be mounted here -->
+        </div>
+
+        <!-- Features section -->
+        <div class="features-section animate-fadeInUp" style="animation-delay: 0.3s;">
+            <div class="feature-item">
+                <div class="feature-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7v5c0 4.5 2.84 8.74 7 9.92 4.16-1.18 7-5.42 7-9.92V7l-10-5z"/>
+                    </svg>
+                </div>
+                <div class="feature-text">
+                    <h3>Безпечно</h3>
+                    <p>Повний захист ваших даних</p>
+                </div>
+            </div>
+
+            <div class="feature-item">
+                <div class="feature-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                </div>
+                <div class="feature-text">
+                    <h3>Швидко</h3>
+                    <p>Миттєва обробка замовлень</p>
+                </div>
+            </div>
+
+            <div class="feature-item">
+                <div class="feature-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                    </svg>
+                </div>
+                <div class="feature-text">
+                    <h3>Надійно</h3>
+                    <p>Гарантія якості послуг</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="login-footer">
+            <p class="footer-text">
+                Натискаючи "Увійти через Telegram", ви погоджуєтесь з
+                <a href="#" class="footer-link">умовами використання</a>
+            </p>
+            <p class="footer-version">v1.0.0</p>
+        </footer>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast-root"></div>
+
+    <!-- Main script -->
+    <script type="module" src="/frontend/pages/login/login.js"></script>
+</body>
+</html>

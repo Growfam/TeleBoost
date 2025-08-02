@@ -1,28 +1,84 @@
 // frontend/shared/services/SupabaseClient.js
-import { createClient } from '@supabase/supabase-js';
+/**
+ * Supabase клієнт з заглушкою для випадків коли Supabase не налаштований
+ */
 
-// Конфігурація з window.CONFIG або дефолтні значення
-const supabaseUrl = window.CONFIG?.SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseAnonKey = window.CONFIG?.SUPABASE_ANON_KEY || 'your-anon-key';
+// Перевіряємо чи налаштований Supabase
+const isSupabaseConfigured = window.CONFIG?.SUPABASE_URL &&
+                           window.CONFIG?.SUPABASE_URL !== 'https://your-project.supabase.co' &&
+                           window.CONFIG?.SUPABASE_ANON_KEY &&
+                           window.CONFIG?.SUPABASE_ANON_KEY !== 'your-anon-key';
 
-// Створюємо клієнт Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    }
+let supabase = null;
+
+// Створюємо клієнт тільки якщо є правильна конфігурація
+if (isSupabaseConfigured) {
+  // Динамічний імпорт Supabase (потрібно додати скрипт в HTML)
+  if (window.createClient) {
+    supabase = window.createClient(window.CONFIG.SUPABASE_URL, window.CONFIG.SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      }
+    });
+  } else {
+    console.warn('Supabase library not loaded');
   }
-});
+} else {
+  console.warn('Supabase not configured - realtime features disabled');
+
+  // Заглушка для supabase
+  supabase = {
+    channel: () => ({
+      on: () => ({ subscribe: () => {} }),
+      subscribe: () => {},
+      unsubscribe: () => {}
+    }),
+    removeChannel: () => {},
+    from: () => ({
+      select: () => Promise.resolve({ data: [], error: null }),
+      insert: () => Promise.resolve({ data: null, error: null }),
+      update: () => Promise.resolve({ data: null, error: null }),
+      delete: () => Promise.resolve({ data: null, error: null })
+    }),
+    realtime: {
+      isConnected: () => false
+    },
+    auth: {
+      getUser: () => Promise.resolve({ data: { user: null }, error: null }),
+      updateUser: () => Promise.resolve({ data: null, error: null }),
+      signOut: () => Promise.resolve({ error: null })
+    },
+    storage: {
+      from: () => ({
+        upload: () => Promise.resolve({ data: null, error: null }),
+        getPublicUrl: () => ({ data: { publicUrl: '' } }),
+        createSignedUrl: () => Promise.resolve({ data: { signedUrl: '' }, error: null }),
+        remove: () => Promise.resolve({ error: null }),
+        list: () => Promise.resolve({ data: [], error: null })
+      })
+    },
+    rpc: () => Promise.resolve({ data: null, error: null })
+  };
+}
+
+export { supabase };
 
 /**
  * Хелпер для підписки на зміни в таблиці
  */
 export function subscribeToTable(table, callback, filters = {}) {
+  if (!isSupabaseConfigured) {
+    console.warn('Supabase not configured - subscribeToTable disabled');
+    return () => {}; // Повертаємо пусту функцію unsubscribe
+  }
+
   const channel = supabase.channel(`${table}_changes`);
 
   // Базова підписка на всі зміни
@@ -74,6 +130,16 @@ export function subscribeToTable(table, callback, filters = {}) {
  * Хелпер для підписки на presence (онлайн статус)
  */
 export function subscribeToPresence(channelName, callbacks = {}) {
+  if (!isSupabaseConfigured) {
+    console.warn('Supabase not configured - subscribeToPresence disabled');
+    return {
+      track: () => {},
+      untrack: () => {},
+      getState: () => ({}),
+      unsubscribe: () => {}
+    };
+  }
+
   const channel = supabase.channel(channelName);
 
   // Підписка на sync
@@ -118,6 +184,14 @@ export function subscribeToPresence(channelName, callbacks = {}) {
  * Хелпер для broadcast (обмін повідомленнями між клієнтами)
  */
 export function subscribeToBroadcast(channelName, event, callback) {
+  if (!isSupabaseConfigured) {
+    console.warn('Supabase not configured - subscribeToBroadcast disabled');
+    return {
+      send: () => {},
+      unsubscribe: () => {}
+    };
+  }
+
   const channel = supabase.channel(channelName);
 
   channel
@@ -148,6 +222,10 @@ export function subscribeToBroadcast(channelName, event, callback) {
 export const Database = {
   // SELECT запити
   async select(table, options = {}) {
+    if (!isSupabaseConfigured) {
+      return { data: [], count: 0 };
+    }
+
     let query = supabase.from(table).select(options.select || '*');
 
     // Фільтри
@@ -186,6 +264,10 @@ export const Database = {
 
   // INSERT
   async insert(table, data) {
+    if (!isSupabaseConfigured) {
+      return null;
+    }
+
     const { data: result, error } = await supabase
       .from(table)
       .insert(data)
@@ -197,6 +279,10 @@ export const Database = {
 
   // UPDATE
   async update(table, id, updates) {
+    if (!isSupabaseConfigured) {
+      return null;
+    }
+
     const { data, error } = await supabase
       .from(table)
       .update(updates)
@@ -209,6 +295,10 @@ export const Database = {
 
   // DELETE
   async delete(table, id) {
+    if (!isSupabaseConfigured) {
+      return true;
+    }
+
     const { error } = await supabase
       .from(table)
       .delete()
@@ -220,6 +310,10 @@ export const Database = {
 
   // RPC (stored procedures)
   async rpc(functionName, params = {}) {
+    if (!isSupabaseConfigured) {
+      return null;
+    }
+
     const { data, error } = await supabase.rpc(functionName, params);
 
     if (error) throw error;
@@ -233,6 +327,10 @@ export const Database = {
 export const Storage = {
   // Завантажити файл
   async upload(bucket, path, file, options = {}) {
+    if (!isSupabaseConfigured) {
+      return null;
+    }
+
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(path, file, {
@@ -247,6 +345,10 @@ export const Storage = {
 
   // Отримати публічний URL
   getPublicUrl(bucket, path) {
+    if (!isSupabaseConfigured) {
+      return '';
+    }
+
     const { data } = supabase.storage
       .from(bucket)
       .getPublicUrl(path);
@@ -256,6 +358,10 @@ export const Storage = {
 
   // Створити підписаний URL
   async createSignedUrl(bucket, path, expiresIn = 3600) {
+    if (!isSupabaseConfigured) {
+      return '';
+    }
+
     const { data, error } = await supabase.storage
       .from(bucket)
       .createSignedUrl(path, expiresIn);
@@ -266,6 +372,10 @@ export const Storage = {
 
   // Видалити файл
   async delete(bucket, paths) {
+    if (!isSupabaseConfigured) {
+      return true;
+    }
+
     const { error } = await supabase.storage
       .from(bucket)
       .remove(paths);
@@ -276,6 +386,10 @@ export const Storage = {
 
   // Список файлів
   async list(bucket, path = '', options = {}) {
+    if (!isSupabaseConfigured) {
+      return [];
+    }
+
     const { data, error } = await supabase.storage
       .from(bucket)
       .list(path, {
@@ -295,6 +409,10 @@ export const Storage = {
 export const Auth = {
   // Отримати поточного користувача
   async getUser() {
+    if (!isSupabaseConfigured) {
+      return null;
+    }
+
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) throw error;
     return user;
@@ -302,6 +420,10 @@ export const Auth = {
 
   // Оновити користувача
   async updateUser(updates) {
+    if (!isSupabaseConfigured) {
+      return null;
+    }
+
     const { data, error } = await supabase.auth.updateUser(updates);
     if (error) throw error;
     return data;
@@ -309,6 +431,10 @@ export const Auth = {
 
   // Вийти
   async signOut() {
+    if (!isSupabaseConfigured) {
+      return true;
+    }
+
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     return true;
