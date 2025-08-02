@@ -1,17 +1,17 @@
 // frontend/pages/home/home.js
 /**
  * Головна сторінка TeleBoost
- * ВИПРАВЛЕНО: Використання оновлених методів авторизації
+ * Виправлена версія з правильною перевіркою авторизації
  */
 
 // Імпорти компонентів
 import Header from '/frontend/shared/components/Header.js';
 import Navigation from '/frontend/shared/components/Navigation.js';
 import { ToastProvider, useToast } from '/frontend/shared/components/Toast.js';
-import TelegramAuth, { AuthGuard, useTelegramAuth } from '/frontend/shared/auth/TelegramAuth.js';
+import { AuthGuard } from '/frontend/shared/auth/TelegramAuth.js';
 
 // Імпорти сервісів
-import { apiClient, AuthAPI, ServicesAPI, OrdersAPI, StatsAPI } from '/frontend/shared/services/APIClient.js';
+import { AuthAPI, ServicesAPI, OrdersAPI, StatsAPI } from '/frontend/shared/services/APIClient.js';
 import { realtimeService, RealtimeSubscriptions } from '/frontend/shared/services/RealtimeService.js';
 import { servicesCache, ordersCache, userCache } from '/frontend/shared/services/CacheService.js';
 
@@ -20,7 +20,7 @@ import BalanceCard from '/frontend/pages/home/components/BalanceCard.js';
 import ServicesGrid from '/frontend/pages/home/components/ServicesGrid.js';
 import RecentOrders from '/frontend/pages/home/components/RecentOrders.js';
 
-// Імпорти утилит
+// Імпорти утиліт
 import { getIcon } from '/frontend/shared/ui/svg.js';
 
 /**
@@ -51,18 +51,15 @@ class HomePage {
    */
   async init() {
     try {
-      console.log('Initializing home page...');
-
       // Ініціалізуємо Telegram Web App
       this.initTelegram();
 
-      // Перевіряємо авторизацію
-      const authResult = await this.checkAuth();
-      console.log('Auth check result:', authResult);
+      // ВИПРАВЛЕННЯ: Використовуємо AuthGuard для перевірки
+      const authResult = await AuthGuard.check();
 
       if (!authResult.isAuthenticated) {
-        console.log('User not authenticated, redirecting to login...');
-        this.showAuthScreen();
+        console.log('User not authenticated, redirecting to login');
+        window.location.href = '/login';
         return;
       }
 
@@ -74,18 +71,21 @@ class HomePage {
       // Завантажуємо дані
       await this.loadInitialData();
 
-      // Підписуємось на realtime оновлення
+      // Підписуємося на realtime оновлення
       this.subscribeToRealtimeUpdates();
 
       // Прибираємо стан завантаження
       this.state.isLoading = false;
       this.hideSkeletons();
 
-      console.log('Home page initialized successfully');
+      // Показуємо вітальне повідомлення
+      if (window.showToast) {
+        window.showToast(`Ласкаво просимо, ${this.state.user.first_name}!`, 'success');
+      }
 
     } catch (error) {
       console.error('Failed to initialize home page:', error);
-      this.showError('Помилка завантаження сторінки');
+      this.showError('Помилка завантаження сторінки. Спробуйте оновити.');
     }
   }
 
@@ -109,81 +109,6 @@ class HomePage {
   }
 
   /**
-   * Перевірка авторизації
-   * ВИПРАВЛЕНО: Використовуємо правильний метод перевірки
-   */
-  async checkAuth() {
-    try {
-      // Перевіряємо локальну авторизацію
-      const localAuth = AuthGuard.check();
-      console.log('Local auth check:', localAuth);
-
-      if (!localAuth.isAuthenticated) {
-        return { isAuthenticated: false, user: null };
-      }
-
-      // Перевіряємо кеш
-      const cachedUser = userCache.get('current_user');
-      if (cachedUser) {
-        console.log('Using cached user data');
-        return { isAuthenticated: true, user: cachedUser };
-      }
-
-      // Запитуємо з сервера
-      console.log('Fetching user data from server...');
-      const response = await AuthAPI.getMe();
-
-      if (response.success && response.data.user) {
-        userCache.set('current_user', response.data.user, 300000); // 5 хвилин
-        return { isAuthenticated: true, user: response.data.user };
-      }
-
-      return { isAuthenticated: false, user: null };
-    } catch (error) {
-      console.error('Auth check failed:', error);
-
-      // Якщо помилка 401 - токен недійсний
-      if (error.code === 'UNAUTHORIZED' || error.status === 401) {
-        apiClient.clearTokens();
-        return { isAuthenticated: false, user: null };
-      }
-
-      // Інші помилки - можливо проблеми з мережею
-      throw error;
-    }
-  }
-
-  /**
-   * Показати екран авторизації
-   */
-  showAuthScreen() {
-    const mainContent = document.querySelector('.main-content');
-    if (!mainContent) return;
-
-    // Приховуємо скелетони
-    this.hideSkeletons();
-
-    // Створюємо компонент авторизації
-    const authComponent = new TelegramAuth({
-      onSuccess: (data) => {
-        console.log('Auth success:', data);
-        // Перезавантажуємо сторінку після успішної авторизації
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
-      },
-      onError: (error) => {
-        console.error('Auth error:', error);
-        this.showError('Помилка авторизації: ' + error.message);
-      }
-    });
-
-    // Показуємо компонент авторизації
-    mainContent.innerHTML = authComponent.render();
-    authComponent.init();
-  }
-
-  /**
    * Ініціалізація компонентів
    */
   initComponents() {
@@ -192,10 +117,8 @@ class HomePage {
       onMenuClick: this.handleMenuClick.bind(this),
       showNotification: false
     });
-    const headerRoot = document.getElementById('header-root');
-    if (headerRoot) {
-      headerRoot.innerHTML = this.components.header.render();
-    }
+    document.getElementById('header-root').innerHTML = this.components.header.render();
+    this.components.header.init();
 
     // Navigation
     this.components.navigation = new Navigation({
@@ -203,10 +126,8 @@ class HomePage {
       onNavigate: this.handleNavigate.bind(this),
       notifications: { orders: 0, profile: false }
     });
-    const navRoot = document.getElementById('navigation-root');
-    if (navRoot) {
-      navRoot.innerHTML = this.components.navigation.render();
-    }
+    document.getElementById('navigation-root').innerHTML = this.components.navigation.render();
+    this.components.navigation.init();
 
     // Balance Card
     this.components.balanceCard = new BalanceCard({
@@ -215,34 +136,27 @@ class HomePage {
       onDeposit: this.handleDeposit.bind(this),
       onHistory: this.handleHistory.bind(this)
     });
-    const balanceRoot = document.getElementById('balance-card-root');
-    if (balanceRoot) {
-      balanceRoot.innerHTML = this.components.balanceCard.render();
-      this.components.balanceCard.init();
-    }
+    document.getElementById('balance-card-root').innerHTML = this.components.balanceCard.render();
+    this.components.balanceCard.init();
 
     // Services Grid
     this.components.servicesGrid = new ServicesGrid({
       services: [],
+      isLoading: true,
       onServiceClick: this.handleServiceClick.bind(this)
     });
-    const servicesRoot = document.getElementById('services-grid-root');
-    if (servicesRoot) {
-      servicesRoot.innerHTML = this.components.servicesGrid.render();
-      this.components.servicesGrid.init();
-    }
+    document.getElementById('services-grid-root').innerHTML = this.components.servicesGrid.render();
+    this.components.servicesGrid.init();
 
     // Recent Orders
     this.components.recentOrders = new RecentOrders({
       orders: [],
+      isLoading: true,
       onOrderClick: this.handleOrderClick.bind(this),
       onViewAll: this.handleViewAllOrders.bind(this)
     });
-    const ordersRoot = document.getElementById('recent-orders-root');
-    if (ordersRoot) {
-      ordersRoot.innerHTML = this.components.recentOrders.render();
-      this.components.recentOrders.init();
-    }
+    document.getElementById('recent-orders-root').innerHTML = this.components.recentOrders.render();
+    this.components.recentOrders.init();
 
     // Додаємо іконки в заголовки секцій
     const servicesIcon = document.getElementById('services-icon');
@@ -261,33 +175,44 @@ class HomePage {
    */
   async loadInitialData() {
     try {
-      console.log('Loading initial data...');
-
       // Завантажуємо паралельно
-      const [servicesResponse, ordersResponse, statsResponse] = await Promise.all([
+      const promises = [
+        this.loadUserBalance(),
         this.loadServices(),
         this.loadOrders(),
         this.loadStats()
-      ]);
+      ];
 
-      // Оновлюємо стан
-      if (servicesResponse) {
-        this.state.services = servicesResponse;
-        this.components.servicesGrid.update({
-          services: servicesResponse,
+      const [balanceData, servicesData, ordersData, statsData] = await Promise.allSettled(promises);
+
+      // Оновлюємо баланс
+      if (balanceData.status === 'fulfilled' && balanceData.value) {
+        this.state.balance = balanceData.value.balance || 0;
+        this.components.balanceCard.update({
+          balance: this.state.balance,
           isLoading: false
         });
       }
 
-      if (ordersResponse) {
-        this.state.orders = ordersResponse;
+      // Оновлюємо сервіси
+      if (servicesData.status === 'fulfilled' && servicesData.value) {
+        this.state.services = servicesData.value;
+        this.components.servicesGrid.update({
+          services: servicesData.value,
+          isLoading: false
+        });
+      }
+
+      // Оновлюємо замовлення
+      if (ordersData.status === 'fulfilled' && ordersData.value) {
+        this.state.orders = ordersData.value;
         this.components.recentOrders.update({
-          orders: ordersResponse,
+          orders: ordersData.value,
           isLoading: false
         });
 
         // Оновлюємо лічильник в навігації
-        const activeOrders = ordersResponse.filter(o =>
+        const activeOrders = ordersData.value.filter(o =>
           ['pending', 'processing', 'in_progress'].includes(o.status)
         ).length;
 
@@ -296,15 +221,38 @@ class HomePage {
         });
       }
 
-      if (statsResponse) {
-        this.state.stats = statsResponse;
-        this.updateStats(statsResponse);
+      // Оновлюємо статистику
+      if (statsData.status === 'fulfilled' && statsData.value) {
+        this.state.stats = statsData.value;
+        this.updateStats(statsData.value);
       }
-
-      console.log('Initial data loaded successfully');
 
     } catch (error) {
       console.error('Failed to load initial data:', error);
+    }
+  }
+
+  /**
+   * Завантаження балансу користувача
+   */
+  async loadUserBalance() {
+    try {
+      const response = await AuthAPI.getMe();
+
+      if (response.success && response.data?.user) {
+        // Оновлюємо дані користувача
+        this.state.user = response.data.user;
+
+        // Кешуємо
+        userCache.set('current_user', response.data.user, 300000);
+
+        return { balance: response.data.user.balance || 0 };
+      }
+
+      return { balance: 0 };
+    } catch (error) {
+      console.error('Failed to load user balance:', error);
+      return { balance: 0 };
     }
   }
 
@@ -316,7 +264,6 @@ class HomePage {
       // Перевіряємо кеш
       const cached = servicesCache.get('telegram_services');
       if (cached) {
-        console.log('Using cached services');
         return cached;
       }
 
@@ -327,7 +274,7 @@ class HomePage {
         limit: 6 // Популярні сервіси
       });
 
-      if (response.success && response.data.services) {
+      if (response.success && response.data?.services) {
         const services = response.data.services;
         servicesCache.set('telegram_services', services, 3600000); // 1 година
         return services;
@@ -346,9 +293,8 @@ class HomePage {
   async loadOrders() {
     try {
       // Перевіряємо кеш
-      const cached = ordersCache.get(`user_orders_${this.state.user.id}`);
+      const cached = ordersCache.get(`user_orders_${this.state.user?.id}`);
       if (cached) {
-        console.log('Using cached orders');
         return cached;
       }
 
@@ -358,7 +304,7 @@ class HomePage {
         page: 1
       });
 
-      if (response.success && response.data.orders) {
+      if (response.success && response.data?.orders) {
         const orders = response.data.orders;
         ordersCache.set(`user_orders_${this.state.user.id}`, orders, 180000); // 3 хвилини
         return orders;
@@ -380,8 +326,8 @@ class HomePage {
 
       if (response.success && response.data) {
         return {
-          totalUsers: response.data.total_users || 15234,
-          totalOrders: response.data.total_orders || 45678,
+          totalUsers: response.data.total_users || 0,
+          totalOrders: response.data.total_orders || 0,
           successRate: response.data.success_rate || 98.5
         };
       }
@@ -400,7 +346,10 @@ class HomePage {
     // Підписка на оновлення балансу
     const balanceUnsubscribe = RealtimeSubscriptions.onBalanceUpdate((data) => {
       this.components.balanceCard.update({ balance: data.new });
-      this.showToast(`Баланс оновлено: ${data.difference > 0 ? '+' : ''}${data.difference.toFixed(2)} USD`, 'info');
+      this.showToast(
+        `Баланс оновлено: ${data.difference > 0 ? '+' : ''}${data.difference.toFixed(2)} USD`,
+        'info'
+      );
     });
     this.subscriptions.push(balanceUnsubscribe);
 
@@ -408,7 +357,7 @@ class HomePage {
     const orderUnsubscribe = RealtimeSubscriptions.onNewOrder((order) => {
       this.state.orders.unshift(order);
       this.components.recentOrders.update({ orders: this.state.orders.slice(0, 5) });
-      this.showToast('Нове замовлення створено', 'success');
+      this.showToast('Новий заказ створено', 'success');
     });
     this.subscriptions.push(orderUnsubscribe);
 
@@ -425,6 +374,18 @@ class HomePage {
       }
     });
     this.subscriptions.push(statusUnsubscribe);
+
+    // Підписка на нові сповіщення
+    const notificationUnsubscribe = RealtimeSubscriptions.onNewNotification((notification) => {
+      // Оновлюємо індикатор в навігації
+      this.components.navigation.update({
+        notifications: {
+          orders: this.components.navigation.state.notifications.orders,
+          profile: true
+        }
+      });
+    });
+    this.subscriptions.push(notificationUnsubscribe);
   }
 
   /**
@@ -465,7 +426,7 @@ class HomePage {
   }
 
   /**
-   * Приховати skeleton loaders
+   * Сховати skeleton loaders
    */
   hideSkeletons() {
     const skeletons = document.querySelectorAll('.skeleton-loader, .services-skeleton, .orders-skeleton');
@@ -478,6 +439,7 @@ class HomePage {
    * Обробники подій
    */
   handleMenuClick(isOpen) {
+    // Відкриття/закриття меню
     console.log('Menu clicked:', isOpen);
   }
 
@@ -529,19 +491,19 @@ class HomePage {
     const mainContent = document.querySelector('.main-content');
     if (mainContent) {
       mainContent.insertBefore(errorContainer, mainContent.firstChild);
-
-      // Автоматично приховати через 5 секунд
-      setTimeout(() => {
-        errorContainer.remove();
-      }, 5000);
     }
+
+    // Видаляємо через 5 секунд
+    setTimeout(() => {
+      errorContainer.remove();
+    }, 5000);
   }
 
   /**
    * Очищення при знищенні
    */
   destroy() {
-    // Відписуємось від усіх підписок
+    // Відписуємося від усіх підписок
     this.subscriptions.forEach(unsubscribe => {
       if (typeof unsubscribe === 'function') {
         unsubscribe();
@@ -559,11 +521,19 @@ class HomePage {
 
 // Ініціалізація сторінки при завантаженні
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM Content Loaded, initializing HomePage...');
+  // Ініціалізуємо Toast провайдер
+  const toastProvider = new ToastProvider();
+  toastProvider.init();
 
+  // Створюємо і ініціалізуємо сторінку
   const homePage = new HomePage();
   homePage.init();
 
-  // Зберігаємо в глобальну змінну для відлагодження
+  // Зберігаємо в глобальну змінну для відладки
   window.homePage = homePage;
+
+  // Обробник виходу
+  window.addEventListener('auth:logout', () => {
+    window.location.href = '/login';
+  });
 });

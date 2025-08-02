@@ -1,7 +1,7 @@
 // frontend/shared/services/APIClient.js
 /**
  * Базовий API клієнт для взаємодії з backend
- * ВИПРАВЛЕНО: Узгоджено читання токенів з TelegramAuth
+ * Виправлена версія з правильною обробкою токенів
  */
 export class APIClient {
   constructor() {
@@ -13,64 +13,54 @@ export class APIClient {
 
     // Завантажуємо токени з localStorage
     this.loadTokens();
-
-    // Слухаємо події авторизації
-    window.addEventListener('auth:login', (e) => this.handleAuthLogin(e.detail));
-    window.addEventListener('auth:logout', () => this.handleAuthLogout());
   }
 
   /**
    * Завантажити токени з localStorage
-   * ВИПРАВЛЕНО: Правильно читаємо формат з TelegramAuth
    */
   loadTokens() {
     try {
-      const authData = localStorage.getItem('auth');
+      // ВИПРАВЛЕННЯ: Читаємо з правильного ключа
+      const auth = JSON.parse(localStorage.getItem('auth') || '{}');
+      this.token = auth.access_token || null;
+      this.refreshToken = auth.refresh_token || null;
 
-      if (!authData) {
-        this.clearTokens();
-        return;
+      // Перевіряємо чи токен не прострочений
+      if (auth.expires_at) {
+        const expiresAt = new Date(auth.expires_at);
+        if (expiresAt <= new Date()) {
+          console.log('Token expired, clearing auth');
+          this.clearTokens();
+        }
       }
-
-      const auth = JSON.parse(authData);
-
-      // Перевіряємо термін дії токена
-      if (auth.expires_at && new Date(auth.expires_at) < new Date()) {
-        console.warn('Token expired, clearing auth data');
-        this.clearTokens();
-        return;
-      }
-
-      this.token = auth.access_token;
-      this.refreshToken = auth.refresh_token;
-
-      console.log('Tokens loaded successfully');
     } catch (e) {
       console.error('Failed to load tokens:', e);
+      // Очищаємо якщо не можемо прочитати
       this.clearTokens();
     }
   }
 
   /**
    * Зберегти токени
-   * ВИПРАВЛЕНО: Зберігаємо в тому ж форматі що й TelegramAuth
    */
-  saveTokens(tokens, user = null) {
+  saveTokens(tokens) {
     try {
+      // Отримуємо існуючі дані
+      const existingAuth = JSON.parse(localStorage.getItem('auth') || '{}');
+
+      // Оновлюємо токени
       const authData = {
+        ...existingAuth,
         access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        token_type: tokens.token_type || 'Bearer',
-        expires_in: tokens.expires_in,
-        expires_at: tokens.expires_at || new Date(Date.now() + (tokens.expires_in || 86400) * 1000).toISOString(),
-        user: user || JSON.parse(localStorage.getItem('auth') || '{}').user
+        refresh_token: tokens.refresh_token || existingAuth.refresh_token,
+        expires_at: tokens.expires_in
+          ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+          : existingAuth.expires_at
       };
 
       localStorage.setItem('auth', JSON.stringify(authData));
-      this.token = tokens.access_token;
-      this.refreshToken = tokens.refresh_token;
-
-      console.log('Tokens saved successfully');
+      this.token = authData.access_token;
+      this.refreshToken = authData.refresh_token;
     } catch (e) {
       console.error('Failed to save tokens:', e);
     }
@@ -81,28 +71,8 @@ export class APIClient {
    */
   clearTokens() {
     localStorage.removeItem('auth');
-    // Очищаємо старі ключі якщо вони існують
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('refresh_token');
-
     this.token = null;
     this.refreshToken = null;
-  }
-
-  /**
-   * Обробка події входу
-   */
-  handleAuthLogin(authData) {
-    if (authData.tokens) {
-      this.saveTokens(authData.tokens, authData.user);
-    }
-  }
-
-  /**
-   * Обробка події виходу
-   */
-  handleAuthLogout() {
-    this.clearTokens();
   }
 
   /**
@@ -125,21 +95,14 @@ export class APIClient {
     }
 
     try {
-      console.log(`API Request: ${options.method || 'GET'} ${endpoint}`);
-
       const response = await fetch(url, config);
-
-      // Логуємо статус
-      console.log(`API Response: ${response.status} ${response.statusText}`);
 
       // Якщо 401 - пробуємо оновити токен
       if (response.status === 401 && this.refreshToken && !options.skipAuth && !options.isRetry) {
-        console.log('Token expired, attempting refresh...');
+        await this.refreshAccessToken();
 
-        const refreshed = await this.refreshAccessToken();
-
-        if (refreshed) {
-          // Повторюємо запит з новим токеном
+        // Повторюємо запит з новим токеном
+        if (this.token) {
           config.headers.Authorization = `Bearer ${this.token}`;
           const retryResponse = await fetch(url, { ...config, isRetry: true });
           return this.handleResponse(retryResponse);
@@ -148,7 +111,6 @@ export class APIClient {
 
       return this.handleResponse(response);
     } catch (error) {
-      console.error('API Request failed:', error);
       this.handleError(error);
     }
   }
@@ -160,11 +122,17 @@ export class APIClient {
     let data;
 
     try {
-      const text = await response.text();
-      data = text ? JSON.parse(text) : {};
+      data = await response.json();
     } catch (e) {
-      console.error('Failed to parse response:', e);
-      data = { error: 'Invalid response format' };
+      // Якщо не можемо розпарсити JSON
+      if (!response.ok) {
+        throw {
+          status: response.status,
+          message: 'Request failed',
+          code: 'PARSE_ERROR'
+        };
+      }
+      data = {};
     }
 
     if (!response.ok) {
@@ -189,11 +157,6 @@ export class APIClient {
     if (error.status === 401 || error.code === 'UNAUTHORIZED') {
       this.clearTokens();
       window.dispatchEvent(new CustomEvent('auth:logout'));
-
-      // Не редіректимо якщо вже на сторінці логіну
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
-      }
     }
 
     throw error;
@@ -201,7 +164,6 @@ export class APIClient {
 
   /**
    * Оновити access token
-   * ВИПРАВЛЕНО: Правильно зберігаємо оновлений токен
    */
   async refreshAccessToken() {
     // Якщо вже оновлюємо - чекаємо
@@ -217,52 +179,24 @@ export class APIClient {
       skipAuth: true
     }).then(response => {
       if (response.success && response.data) {
-        // Зберігаємо новий токен
-        const currentAuth = JSON.parse(localStorage.getItem('auth') || '{}');
-
-        this.saveTokens({
-          access_token: response.data.access_token,
-          refresh_token: currentAuth.refresh_token, // Refresh token не змінюється
-          token_type: response.data.token_type || 'Bearer',
-          expires_in: response.data.expires_in || 86400
-        }, currentAuth.user);
-
-        console.log('Token refreshed successfully');
-        return true;
+        this.saveTokens(response.data);
+      } else {
+        // Не вдалось оновити - очищаємо токени
+        this.clearTokens();
+        throw new Error('Failed to refresh token');
       }
-
-      console.error('Failed to refresh token');
-      this.clearTokens();
-      return false;
+      return response;
     }).catch(error => {
-      console.error('Token refresh error:', error);
+      // При помилці оновлення - logout
       this.clearTokens();
-      return false;
+      window.dispatchEvent(new CustomEvent('auth:logout'));
+      throw error;
     }).finally(() => {
       this.isRefreshing = false;
       this.refreshPromise = null;
     });
 
     return this.refreshPromise;
-  }
-
-  /**
-   * Перевірити чи авторизований
-   */
-  isAuthenticated() {
-    return !!this.token;
-  }
-
-  /**
-   * Отримати поточного користувача
-   */
-  getCurrentUser() {
-    try {
-      const auth = JSON.parse(localStorage.getItem('auth') || '{}');
-      return auth.user || null;
-    } catch (e) {
-      return null;
-    }
   }
 
   // HTTP методи
@@ -305,12 +239,20 @@ export const apiClient = new APIClient();
 export const AuthAPI = {
   async loginWithTelegram(initData) {
     const response = await apiClient.post('/auth/telegram', { initData });
+    if (response.success && response.data) {
+      // Зберігаємо всі дані авторизації
+      const authData = {
+        access_token: response.data.tokens.access_token,
+        refresh_token: response.data.tokens.refresh_token,
+        user: response.data.user,
+        expires_at: new Date(Date.now() + (response.data.tokens.expires_in || 86400) * 1000).toISOString()
+      };
 
-    if (response.success) {
-      // Токени вже збережені в TelegramAuth, тут тільки emit подію
+      localStorage.setItem('auth', JSON.stringify(authData));
+      apiClient.loadTokens(); // Перезавантажуємо токени
+
       window.dispatchEvent(new CustomEvent('auth:login', { detail: response.data }));
     }
-
     return response;
   },
 
@@ -319,9 +261,8 @@ export const AuthAPI = {
       await apiClient.post('/auth/logout');
     } catch (e) {
       // Ігноруємо помилки при logout
-      console.error('Logout error:', e);
+      console.log('Logout error (ignored):', e);
     }
-
     apiClient.clearTokens();
     window.dispatchEvent(new CustomEvent('auth:logout'));
   },
@@ -355,10 +296,6 @@ export const ServicesAPI = {
 
   async calculatePrice(data) {
     return apiClient.post('/services/calculate-price', data);
-  },
-
-  async sync() {
-    return apiClient.post('/services/sync');
   }
 };
 
@@ -390,6 +327,10 @@ export const OrdersAPI = {
 
   async calculatePrice(data) {
     return apiClient.post('/orders/calculate-price', data);
+  },
+
+  async getStatistics() {
+    return apiClient.get('/orders/statistics');
   }
 };
 
@@ -407,16 +348,20 @@ export const PaymentsAPI = {
     return apiClient.post(`/payments/${id}/check`);
   },
 
+  async getAll(params = {}) {
+    return apiClient.get('/payments', params);
+  },
+
   async getMethods() {
     return apiClient.get('/payments/methods');
   },
 
-  async calculate(data) {
-    return apiClient.post('/payments/calculate', data);
-  },
-
   async getLimits() {
     return apiClient.get('/payments/limits');
+  },
+
+  async calculate(data) {
+    return apiClient.post('/payments/calculate', data);
   }
 };
 
@@ -432,6 +377,10 @@ export const UsersAPI = {
 
   async getTransactions(params = {}) {
     return apiClient.get('/users/transactions', params);
+  },
+
+  async exportTransactions(params = {}) {
+    return apiClient.get('/users/transactions/export', params);
   },
 
   async getStatistics() {
@@ -494,21 +443,6 @@ export const ReferralsAPI = {
 export const StatsAPI = {
   async getLive() {
     return apiClient.get('/statistics/live');
-  },
-
-  async getOverview() {
-    return apiClient.get('/statistics/overview', {}, { skipAuth: true });
-  }
-};
-
-// Config API
-export const ConfigAPI = {
-  async getPublic() {
-    return apiClient.get('/config', {}, { skipAuth: true });
-  },
-
-  async getStatus() {
-    return apiClient.get('/status', {}, { skipAuth: true });
   }
 };
 
