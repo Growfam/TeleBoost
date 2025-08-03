@@ -160,6 +160,12 @@ export class APIClient {
    * Базовий метод для запитів
    */
   async request(endpoint, options = {}) {
+    // ВАЖЛИВО: Завжди перезавантажуємо токени перед запитом
+    if (!options.skipAuth) {
+      this.loadTokens();
+      console.log(`🟩 APIClient: Token reloaded - ${this.token ? 'EXISTS' : 'MISSING'} for ${endpoint}`);
+    }
+
     this.requestCount++;
     const requestId = `REQ-${this.requestCount}`;
 
@@ -228,9 +234,7 @@ export class APIClient {
         // Повторюємо запит з новим токеном
         if (this.token) {
           console.log(`🟩 APIClient: ${requestId} - Retrying with new token`);
-          config.headers.Authorization = `Bearer ${this.token}`;
-          const retryResponse = await fetch(url, { ...config, isRetry: true });
-          return this.handleResponse(retryResponse, requestId);
+          return this.request(endpoint, { ...options, isRetry: true });
         } else {
           console.log(`🟩 APIClient: ${requestId} - No token after refresh, giving up`);
         }

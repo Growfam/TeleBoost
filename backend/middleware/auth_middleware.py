@@ -39,6 +39,19 @@ class AuthMiddleware:
 
         # Static files
         'static',
+
+        # Frontend routes - ВСІ ПУБЛІЧНІ
+        'root', 'splash_page', 'login_page', 'home_page',
+        'serve_frontend', 'serve_shared', 'serve_pages',
+        'serve_js', 'serve_css',
+
+        # API routes - БАЗОВІ ПУБЛІЧНІ
+        'api_index', 'api.get_public_config',
+        'statistics.live_statistics',
+
+        # Services - публічний доступ для перегляду
+        'services.get_services', 'services.get_service',
+        'services.get_categories',
     }
 
     # Endpoints with optional authentication
@@ -65,8 +78,12 @@ class AuthMiddleware:
         Returns:
             None if successful, error response if failed
         """
+        # Логування для дебагу
+        logger.info(f"🔍 Auth check for endpoint: {request.endpoint}, path: {request.path}, method: {request.method}")
+
         # Skip authentication for public endpoints
         if request.endpoint in self.PUBLIC_ENDPOINTS:
+            logger.info(f"✅ Endpoint {request.endpoint} is public, skipping auth")
             return None
 
         # Skip for OPTIONS requests (CORS preflight)
@@ -86,6 +103,7 @@ class AuthMiddleware:
 
         # For protected endpoints, token is required
         if not auth_header:
+            logger.warning(f"❌ Missing authorization header for protected endpoint: {request.endpoint}")
             return self._unauthorized_response('Missing authorization header')
 
         # Validate Bearer format
