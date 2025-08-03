@@ -1,7 +1,7 @@
 // frontend/shared/auth/TelegramAuth.js
 /**
  * Компонент Telegram авторизації для TeleBoost
- * Оновлена версія з покращеною обробкою помилок
+ * ВЕРСИЯ С ПОЛНЫМ ЛОГИРОВАНИЕМ ДЛЯ ДИАГНОСТИКИ
  */
 
 import { getIcon } from '../ui/svg.js';
@@ -239,6 +239,25 @@ const styles = `
   color: #fbbf24;
 }
 
+.debug-panel {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 20px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #0f0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.debug-line {
+  margin: 2px 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -288,6 +307,8 @@ const styles = `
  */
 export class TelegramAuth {
   constructor(options = {}) {
+    console.log('🟦 TelegramAuth: Constructor called with options:', options);
+
     this.options = {
       onSuccess: options.onSuccess || (() => {}),
       onError: options.onError || (() => {}),
@@ -307,6 +328,35 @@ export class TelegramAuth {
 
     this.element = null;
     this.autoLoginAttempted = false;
+    this.debugLogs = [];
+
+    this.log('Constructor completed');
+  }
+
+  /**
+   * Логування з таймстемпом
+   */
+  log(message, data = null) {
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] ${message}${data ? ': ' + JSON.stringify(data) : ''}`;
+    console.log(`🟦 TelegramAuth: ${message}`, data || '');
+    this.debugLogs.push(logEntry);
+
+    // Оновлюємо debug панель якщо вона є
+    this.updateDebugPanel();
+  }
+
+  /**
+   * Оновити debug панель
+   */
+  updateDebugPanel() {
+    const debugPanel = document.getElementById('telegram-auth-debug');
+    if (debugPanel) {
+      debugPanel.innerHTML = this.debugLogs.map(log =>
+        `<div class="debug-line">${log}</div>`
+      ).join('');
+      debugPanel.scrollTop = debugPanel.scrollHeight;
+    }
   }
 
   /**
@@ -317,6 +367,18 @@ export class TelegramAuth {
       ${styles}
       <div class="telegram-auth-container">
         ${this.state.isTelegramAvailable ? this.renderAuthCard() : this.renderBrowserWarning()}
+        ${window.CONFIG?.DEBUG ? this.renderDebugPanel() : ''}
+      </div>
+    `;
+  }
+
+  /**
+   * Рендер debug панелі
+   */
+  renderDebugPanel() {
+    return `
+      <div class="debug-panel" id="telegram-auth-debug">
+        ${this.debugLogs.map(log => `<div class="debug-line">${log}</div>`).join('')}
       </div>
     `;
   }
@@ -488,8 +550,11 @@ export class TelegramAuth {
    * Ініціалізація компонента
    */
   init(containerId) {
+    this.log('Init called with containerId', containerId);
+
     this.element = document.getElementById(containerId);
     if (!this.element) {
+      this.log('ERROR: Container not found', containerId);
       console.error(`Container ${containerId} not found`);
       return;
     }
@@ -509,9 +574,13 @@ export class TelegramAuth {
     // Автологін якщо увімкнено і доступний Telegram
     if (this.options.autoLogin && this.state.isTelegramAvailable && !this.autoLoginAttempted) {
       this.autoLoginAttempted = true;
+      this.log('Auto-login enabled, attempting in 500ms');
       setTimeout(() => {
         if (window.Telegram?.WebApp?.initData) {
+          this.log('Auto-login: initData found, calling handleAuth');
           this.handleAuth();
+        } else {
+          this.log('Auto-login: no initData available');
         }
       }, 500);
     }
@@ -524,9 +593,17 @@ export class TelegramAuth {
     const tg = window.Telegram?.WebApp;
     this.state.isTelegramAvailable = !!(tg && tg.initData);
 
+    this.log('Telegram availability check', {
+      hasTelegram: !!window.Telegram,
+      hasWebApp: !!window.Telegram?.WebApp,
+      hasInitData: !!window.Telegram?.WebApp?.initData,
+      initDataLength: window.Telegram?.WebApp?.initData?.length || 0,
+      result: this.state.isTelegramAvailable
+    });
+
     // В режимі розробки завжди показуємо інтерфейс
     if (window.CONFIG?.DEBUG && !this.state.isTelegramAvailable) {
-      console.log('Debug mode: Telegram not available, showing browser warning');
+      this.log('Debug mode: Telegram not available, showing browser warning');
     }
   }
 
@@ -534,18 +611,35 @@ export class TelegramAuth {
    * Ініціалізація Telegram Web App
    */
   initTelegram() {
+    this.log('InitTelegram called');
+
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
 
+      this.log('Telegram WebApp object', {
+        version: tg.version,
+        platform: tg.platform,
+        colorScheme: tg.colorScheme,
+        viewportHeight: tg.viewportHeight,
+        viewportStableHeight: tg.viewportStableHeight,
+        isExpanded: tg.isExpanded,
+        initDataUnsafe: tg.initDataUnsafe
+      });
+
       // Розширюємо на весь екран
       tg.expand();
+      this.log('Called tg.expand()');
 
       // Встановлюємо кольори
       tg.setHeaderColor('#1a0033');
       tg.setBackgroundColor('#000000');
+      this.log('Set header and background colors');
 
       // Готовність
       tg.ready();
+      this.log('Called tg.ready()');
+    } else {
+      this.log('WARNING: Telegram WebApp not available');
     }
   }
 
@@ -553,38 +647,100 @@ export class TelegramAuth {
    * Обробка авторизації
    */
   async handleAuth() {
+    this.log('=== AUTH PROCESS STARTED ===');
+
     try {
       this.setState({ isLoading: true, error: null });
+      this.log('State updated: isLoading = true');
 
       const tg = window.Telegram.WebApp;
+      this.log('Telegram WebApp object', {
+        exists: !!tg,
+        initData: tg?.initData ? 'EXISTS' : 'NOT EXISTS',
+        initDataLength: tg?.initData?.length || 0
+      });
 
       if (!tg || !tg.initData) {
-        throw new Error('Telegram WebApp недоступний. Відкрийте додаток в Telegram.');
+        const error = 'Telegram WebApp недоступний. Відкрийте додаток в Telegram.';
+        this.log('ERROR: No Telegram WebApp or initData');
+        throw new Error(error);
       }
 
       // Отримуємо дані користувача
       const userData = tg.initDataUnsafe.user;
+      this.log('User data from Telegram', {
+        hasUserData: !!userData,
+        userId: userData?.id,
+        firstName: userData?.first_name,
+        username: userData?.username
+      });
 
       if (!userData) {
         throw new Error('Дані користувача не знайдено');
       }
 
+      // Формуємо URL для запиту
+      const apiUrl = `${window.CONFIG?.API_URL || ''}/auth/telegram`;
+      this.log('API URL for auth', apiUrl);
+
+      // Формуємо тіло запиту
+      const requestBody = {
+        initData: tg.initData,
+        referralCode: tg.initDataUnsafe.start_param
+      };
+      this.log('Request body prepared', {
+        hasInitData: !!requestBody.initData,
+        initDataLength: requestBody.initData.length,
+        hasReferralCode: !!requestBody.referralCode
+      });
+
       // Відправляємо на backend
-      const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/telegram`, {
+      this.log('Sending POST request to backend...');
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          initData: tg.initData,
-          referralCode: tg.initDataUnsafe.start_param
-        })
+        body: JSON.stringify(requestBody)
       });
 
-      const data = await response.json();
+      this.log('Response received', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      const responseText = await response.text();
+      this.log('Response body (raw)', responseText.substring(0, 200) + '...');
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        this.log('Response parsed successfully', {
+          success: data.success,
+          hasData: !!data.data,
+          hasTokens: !!data.data?.tokens,
+          hasUser: !!data.data?.user,
+          error: data.error
+        });
+      } catch (e) {
+        this.log('ERROR: Failed to parse response as JSON');
+        throw new Error('Invalid response from server');
+      }
 
       if (!data.success) {
+        this.log('ERROR: Server returned success=false', {
+          error: data.error,
+          code: data.code
+        });
         throw new Error(data.error || 'Помилка авторизації');
+      }
+
+      // Перевіряємо структуру відповіді
+      if (!data.data?.tokens?.access_token) {
+        this.log('ERROR: No access token in response');
+        throw new Error('Не отримано токен доступу');
       }
 
       // Зберігаємо токени
@@ -595,7 +751,22 @@ export class TelegramAuth {
         expires_at: new Date(Date.now() + (data.data.tokens.expires_in || 86400) * 1000).toISOString()
       };
 
+      this.log('Saving auth data to localStorage', {
+        hasAccessToken: !!authData.access_token,
+        hasRefreshToken: !!authData.refresh_token,
+        hasUser: !!authData.user,
+        expiresAt: authData.expires_at
+      });
+
       localStorage.setItem('auth', JSON.stringify(authData));
+      this.log('Auth data saved to localStorage');
+
+      // Перевіряємо що збереглось
+      const savedAuth = localStorage.getItem('auth');
+      this.log('Verification: auth data in localStorage', {
+        exists: !!savedAuth,
+        length: savedAuth?.length || 0
+      });
 
       // Оновлюємо стан
       this.setState({
@@ -603,27 +774,39 @@ export class TelegramAuth {
         isAuthenticated: true,
         isLoading: false
       });
+      this.log('State updated: isAuthenticated = true');
 
       // Викликаємо callback
+      this.log('Calling onSuccess callback');
       this.options.onSuccess(data.data);
 
       // Відправляємо глобальну подію
+      this.log('Dispatching auth:login event');
       window.dispatchEvent(new CustomEvent('auth:login', { detail: data.data }));
 
       // Показуємо успішну кнопку на 1.5 секунди
+      this.log('Auth completed successfully, redirecting in 1.5s');
       setTimeout(() => {
-        // Редіректимо на головну сторінку
+        this.log('Redirecting to /home');
         window.location.href = '/home';
       }, 1500);
 
     } catch (err) {
+      this.log('ERROR in handleAuth', {
+        message: err.message,
+        stack: err.stack
+      });
       console.error('Auth error:', err);
+
       this.setState({
         error: err.message,
         isLoading: false
       });
+
       this.options.onError(err);
     }
+
+    this.log('=== AUTH PROCESS ENDED ===');
   }
 
   /**
@@ -631,6 +814,8 @@ export class TelegramAuth {
    */
   async handleDevLogin() {
     if (!window.CONFIG?.DEBUG) return;
+
+    this.log('=== DEV LOGIN STARTED ===');
 
     try {
       this.setState({ isLoading: true, error: null });
@@ -654,7 +839,10 @@ export class TelegramAuth {
         expires_at: new Date(Date.now() + 86400 * 1000).toISOString()
       };
 
+      this.log('Dev auth data created', authData);
+
       localStorage.setItem('auth', JSON.stringify(authData));
+      this.log('Dev auth data saved to localStorage');
 
       this.setState({
         user: testUser,
@@ -664,22 +852,27 @@ export class TelegramAuth {
 
       // Редіректимо на головну
       setTimeout(() => {
+        this.log('Dev login: redirecting to /home');
         window.location.href = '/home';
       }, 1000);
 
     } catch (err) {
+      this.log('ERROR in dev login', err);
       console.error('Dev login error:', err);
       this.setState({
         error: 'Помилка тестового входу',
         isLoading: false
       });
     }
+
+    this.log('=== DEV LOGIN ENDED ===');
   }
 
   /**
    * Оновити стан
    */
   setState(updates) {
+    this.log('setState called', updates);
     Object.assign(this.state, updates);
     if (this.element) {
       this.element.innerHTML = this.render();
@@ -706,6 +899,7 @@ export class TelegramAuth {
    * Знищити компонент
    */
   destroy() {
+    this.log('Destroy called');
     if (window.telegramAuth === this) {
       delete window.telegramAuth;
     }
@@ -714,76 +908,5 @@ export class TelegramAuth {
     }
   }
 }
-
-/**
- * Hook для Telegram авторизації (для сумісності)
- */
-export const useTelegramAuth = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const authData = JSON.parse(localStorage.getItem('auth') || '{}');
-      const token = authData.access_token;
-
-      if (!token) {
-        setIsAuthenticated(false);
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/verify`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.data.valid) {
-        setIsAuthenticated(true);
-        setUser(data.data.user);
-      } else {
-        setIsAuthenticated(false);
-        localStorage.removeItem('auth');
-      }
-    } catch (err) {
-      console.error('Auth check error:', err);
-      setIsAuthenticated(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const login = async () => {
-    // Тригер Telegram авторизації
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
-      tg.openTelegramLink(`https://t.me/${window.CONFIG?.BOT_USERNAME || 'TeleeBoost_bot'}?start=auth`);
-    }
-  };
-
-  const logout = () => {
-    localStorage.removeItem('auth');
-    setIsAuthenticated(false);
-    setUser(null);
-    window.dispatchEvent(new CustomEvent('auth:logout'));
-  };
-
-  return {
-    isAuthenticated,
-    user,
-    isLoading,
-    login,
-    logout,
-    checkAuth
-  };
-};
 
 export default TelegramAuth;
