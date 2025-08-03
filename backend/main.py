@@ -143,7 +143,7 @@ def register_frontend_routes(app):
         if request.headers.get('Accept', '').startswith('text/html'):
             # Показуємо index.html який редіректить на splash
             try:
-                return send_from_directory('../frontend/pages', 'index.html')
+                return send_from_directory('../frontend', 'index.html')
             except:
                 # Fallback редірект
                 return """
@@ -175,7 +175,7 @@ def register_frontend_routes(app):
     def splash_page():
         """Splash screen - ПУБЛІЧНИЙ"""
         try:
-            return send_from_directory('../frontend/pages', 'splash.html')
+            return send_from_directory('../frontend', 'splash.html')
         except Exception as e:
             logger.error(f"Failed to serve splash.html: {e}")
             # Fallback на логін

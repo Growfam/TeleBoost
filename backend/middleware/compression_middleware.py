@@ -108,54 +108,65 @@ class CompressionMiddleware:
         # Get accepted encodings
         accept_encoding = request.headers.get('Accept-Encoding', '')
 
-        # Get response data
-        data = response.get_data()
-        original_size = len(data)
-
-        # Try Brotli first (better compression)
-        if BROTLI_AVAILABLE and 'br' in accept_encoding:
-            compressed_data = self._brotli_compress(data)
-            encoding = 'br'
-            self.stats['brotli_used'] += 1
-        # Fall back to gzip
-        elif 'gzip' in accept_encoding:
-            compressed_data = self._gzip_compress(data)
-            encoding = 'gzip'
-            self.stats['gzip_used'] += 1
-        else:
-            # Client doesn't support compression
+        # Check if response is in direct passthrough mode
+        if response.direct_passthrough:
+            # Don't compress files being sent directly
             return response
 
-        # Check if compression actually saved space
-        compressed_size = len(compressed_data)
-        if compressed_size >= original_size * 0.9:  # Less than 10% savings
+        try:
+            # Get response data
+            data = response.get_data()
+            original_size = len(data)
+
+            # Try Brotli first (better compression)
+            if BROTLI_AVAILABLE and 'br' in accept_encoding:
+                compressed_data = self._brotli_compress(data)
+                encoding = 'br'
+                self.stats['brotli_used'] += 1
+            # Fall back to gzip
+            elif 'gzip' in accept_encoding:
+                compressed_data = self._gzip_compress(data)
+                encoding = 'gzip'
+                self.stats['gzip_used'] += 1
+            else:
+                # Client doesn't support compression
+                return response
+
+            # Check if compression actually saved space
+            compressed_size = len(compressed_data)
+            if compressed_size >= original_size * 0.9:  # Less than 10% savings
+                return response
+
+            # Update response with compressed data
+            response.set_data(compressed_data)
+
+            # Set compression headers
+            response.headers['Content-Encoding'] = encoding
+            response.headers['Content-Length'] = str(compressed_size)
+
+            # Add Vary header to indicate response varies by Accept-Encoding
+            vary = response.headers.get('Vary', '')
+            if vary:
+                if 'Accept-Encoding' not in vary:
+                    response.headers['Vary'] = f"{vary}, Accept-Encoding"
+            else:
+                response.headers['Vary'] = 'Accept-Encoding'
+
+            # Update statistics
+            self.stats['total_compressed'] += 1
+            self.stats['bytes_saved'] += (original_size - compressed_size)
+
+            # Log compression ratio for debugging
+            ratio = (1 - compressed_size / original_size) * 100
+            logger.debug(
+                f"Compressed response: {original_size} → {compressed_size} bytes "
+                f"({ratio:.1f}% reduction) using {encoding}"
+            )
+
+        except Exception as e:
+            # If compression fails, return original response
+            logger.error(f"Compression failed: {e}")
             return response
-
-        # Update response with compressed data
-        response.set_data(compressed_data)
-
-        # Set compression headers
-        response.headers['Content-Encoding'] = encoding
-        response.headers['Content-Length'] = str(compressed_size)
-
-        # Add Vary header to indicate response varies by Accept-Encoding
-        vary = response.headers.get('Vary', '')
-        if vary:
-            if 'Accept-Encoding' not in vary:
-                response.headers['Vary'] = f"{vary}, Accept-Encoding"
-        else:
-            response.headers['Vary'] = 'Accept-Encoding'
-
-        # Update statistics
-        self.stats['total_compressed'] += 1
-        self.stats['bytes_saved'] += (original_size - compressed_size)
-
-        # Log compression ratio for debugging
-        ratio = (1 - compressed_size / original_size) * 100
-        logger.debug(
-            f"Compressed response: {original_size} → {compressed_size} bytes "
-            f"({ratio:.1f}% reduction) using {encoding}"
-        )
 
         return response
 
@@ -175,6 +186,10 @@ class CompressionMiddleware:
 
         # Check status code (only compress successful responses)
         if response.status_code < 200 or response.status_code >= 300:
+            return False
+
+        # Skip if response is in direct passthrough mode
+        if response.direct_passthrough:
             return False
 
         # Check content type
@@ -205,8 +220,13 @@ class CompressionMiddleware:
 
         # If no content length, check actual data size
         if content_length is None:
-            data_size = len(response.get_data())
-            if data_size < self.MIN_SIZE:
+            try:
+                data_size = len(response.get_data())
+                response.set_data(response.get_data())  # Reset data
+                if data_size < self.MIN_SIZE:
+                    return False
+            except:
+                # If we can't get data, don't compress
                 return False
 
         return True
