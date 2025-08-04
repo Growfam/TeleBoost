@@ -188,9 +188,12 @@ class AuthMiddleware:
         if cached_result is not None:
             if cached_result['valid']:
                 # Set user context from cache
-                g.current_user = cached_result['user']
+                user_data = cached_result['user']
+                # Створюємо об'єкт User з словника
+                g.current_user = User(user_data) if isinstance(user_data, dict) else user_data
                 g.jwt_payload = cached_result['payload']
-                logger.debug(f"✅ Token validated from cache for user {cached_result['user'].telegram_id}")
+                logger.debug(
+                    f"✅ Token validated from cache for user {user_data.get('telegram_id') if isinstance(user_data, dict) else user_data.telegram_id}")
                 return None
             else:
                 logger.warning("❌ Cached token validation failed")
@@ -260,7 +263,7 @@ class AuthMiddleware:
 
             cache_data = {
                 'valid': valid,
-                'user': user.to_dict() if user else None,
+                'user': user.to_dict() if user else None,  # ← Зберігаємо як словник
                 'payload': payload,
                 'cached_at': time.time()
             }
