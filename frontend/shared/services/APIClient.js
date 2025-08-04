@@ -1,12 +1,23 @@
 // frontend/shared/services/APIClient.js
 /**
  * API клієнт для взаємодії з backend
- * Production версія
+ * Production версія з примусовим HTTPS
  */
 
 export class APIClient {
   constructor() {
-    this.baseURL = window.CONFIG?.API_URL || 'https://teleboost-teleboost.up.railway.app/api';
+    // ПРИМУСОВО HTTPS!
+    const configUrl = window.CONFIG?.API_URL || 'https://teleboost-teleboost.up.railway.app/api';
+
+    // Якщо ми на HTTPS - примусово міняємо API URL на HTTPS
+    if (window.location.protocol === 'https:') {
+        this.baseURL = configUrl.replace('http://', 'https://');
+    } else {
+        this.baseURL = configUrl;
+    }
+
+    console.log('APIClient initialized with:', this.baseURL); // Для перевірки
+
     this.token = null;
     this.refreshToken = null;
     this.isRefreshing = false;
@@ -228,8 +239,13 @@ export class APIClient {
   }
 }
 
-// Singleton instance
+// Singleton instance з примусовим HTTPS
 export const apiClient = new APIClient();
+
+// Додатково переконуємося що глобальний apiClient також використовує HTTPS
+if (typeof window !== 'undefined') {
+  window.apiClient = apiClient;
+}
 
 // Auth методи
 export const AuthAPI = {
