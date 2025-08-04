@@ -141,6 +141,10 @@ class AuthMiddleware:
         if request.endpoint in self.PUBLIC_ENDPOINTS:
             logger.debug(f"✅ Endpoint {request.endpoint} is public, skipping auth")
             return None
+            # Check URL patterns FIRST (before endpoint check)
+        if self._is_public_path(request.path):
+            logger.debug(f"✅ Path {request.path} matches public pattern, skipping auth")
+            return None
 
         # Check URL patterns
         if self._is_public_path(request.path):
