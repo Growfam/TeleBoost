@@ -2,7 +2,7 @@
 """
 TeleBoost Auth Routes
 API endpoints для авторизації
-ВЕРСИЯ С ПОЛНЫМ ЛОГИРОВАНИЕМ ДЛЯ ДИАГНОСТИКИ
+ВИПРАВЛЕНА ВЕРСІЯ З ДЕТАЛЬНИМ ЛОГУВАННЯМ
 """
 import logging
 from flask import Blueprint, request, jsonify, g
@@ -57,37 +57,85 @@ def telegram_login():
         }
     }
     """
-    logger.info("🔴 AUTH: /telegram endpoint called")
+    logger.info("🔴 AUTH: ========== TELEGRAM LOGIN START ==========")
     logger.info(f"🔴 AUTH: Request method: {request.method}")
-    logger.info(f"🔴 AUTH: Request headers: {dict(request.headers)}")
+    logger.info(f"🔴 AUTH: Request headers count: {len(request.headers)}")
+    logger.info(f"🔴 AUTH: Content-Type: {request.headers.get('Content-Type')}")
+    logger.info(f"🔴 AUTH: Content-Length: {request.headers.get('Content-Length')}")
     logger.info(f"🔴 AUTH: Request remote_addr: {request.remote_addr}")
 
     try:
-        # Отримуємо дані
-        data = request.get_json()
-        logger.info(f"🔴 AUTH: Request JSON data received: {bool(data)}")
+        # Отримуємо дані різними способами
+        data = None
+
+        # Спосіб 1: JSON body
+        try:
+            data = request.get_json(force=True)
+            logger.info(f"🔴 AUTH: Got JSON data: {bool(data)}")
+        except Exception as e:
+            logger.warning(f"🔴 AUTH: Failed to parse JSON: {e}")
+
+        # Спосіб 2: Form data
+        if not data:
+            try:
+                data = request.form.to_dict()
+                logger.info(f"🔴 AUTH: Got form data: {bool(data)}")
+            except Exception as e:
+                logger.warning(f"🔴 AUTH: Failed to parse form: {e}")
+
+        # Спосіб 3: Raw data
+        if not data:
+            try:
+                raw_data = request.get_data(as_text=True)
+                logger.info(f"🔴 AUTH: Raw data length: {len(raw_data)}")
+                logger.info(f"🔴 AUTH: Raw data preview: {raw_data[:200]}...")
+
+                # Спробуємо розпарсити як JSON
+                import json
+                data = json.loads(raw_data)
+            except Exception as e:
+                logger.warning(f"🔴 AUTH: Failed to parse raw data: {e}")
 
         if data:
             logger.info(f"🔴 AUTH: Data keys: {list(data.keys())}")
             logger.info(f"🔴 AUTH: Has initData: {'initData' in data}")
             logger.info(f"🔴 AUTH: Has referralCode: {'referralCode' in data}")
+
             if 'initData' in data:
-                logger.info(f"🔴 AUTH: initData length: {len(data['initData'])}")
-                logger.info(f"🔴 AUTH: initData preview: {data['initData'][:100]}...")
+                init_data = data['initData']
+                logger.info(f"🔴 AUTH: initData type: {type(init_data)}")
+                logger.info(
+                    f"🔴 AUTH: initData length: {len(init_data) if isinstance(init_data, str) else 'not string'}")
+
+                if isinstance(init_data, str):
+                    logger.info(f"🔴 AUTH: initData preview: {init_data[:200]}...")
+
+                    # Перевіряємо чи містить основні параметри
+                    if 'auth_date=' in init_data:
+                        logger.info("🔴 AUTH: initData contains auth_date")
+                    if 'hash=' in init_data:
+                        logger.info("🔴 AUTH: initData contains hash")
+                    if 'user=' in init_data:
+                        logger.info("🔴 AUTH: initData contains user")
 
         if not data or 'initData' not in data:
             logger.warning("🔴 AUTH: Missing initData in request")
+            logger.warning(f"🔴 AUTH: Available data: {data}")
             return jsonify({
                 'success': False,
                 'error': 'initData is required',
-                'code': 'MISSING_INIT_DATA'
+                'code': 'MISSING_INIT_DATA',
+                'debug': {
+                    'received_keys': list(data.keys()) if data else [],
+                    'content_type': request.headers.get('Content-Type')
+                }
             }), 400
 
         init_data = data['initData']
         logger.info(f"🔴 AUTH: Extracted initData, length: {len(init_data)}")
 
         # Верифікуємо дані від Telegram
-        logger.info("🔴 AUTH: Verifying Telegram data...")
+        logger.info("🔴 AUTH: Starting Telegram data verification...")
         is_valid, telegram_data = verify_telegram_data(init_data)
 
         logger.info(f"🔴 AUTH: Verification result: is_valid={is_valid}, has_data={bool(telegram_data)}")
@@ -96,13 +144,23 @@ def telegram_login():
             logger.info(f"🔴 AUTH: User ID: {telegram_data.get('id')}")
             logger.info(f"🔴 AUTH: Username: {telegram_data.get('username')}")
             logger.info(f"🔴 AUTH: First name: {telegram_data.get('first_name')}")
+            logger.info(f"🔴 AUTH: Is Premium: {telegram_data.get('is_premium')}")
 
         if not is_valid or not telegram_data:
             logger.warning(f"🔴 AUTH: Invalid Telegram auth attempt")
+            logger.warning(f"🔴 AUTH: Verification failed - is_valid: {is_valid}, telegram_data: {telegram_data}")
+
+            # Детальна інформація про помилку
             return jsonify({
                 'success': False,
                 'error': 'Invalid Telegram data',
-                'code': 'INVALID_TELEGRAM_DATA'
+                'code': 'INVALID_TELEGRAM_DATA',
+                'debug': {
+                    'is_valid': is_valid,
+                    'has_telegram_data': bool(telegram_data),
+                    'init_data_length': len(init_data),
+                    'init_data_preview': init_data[:100] + '...' if len(init_data) > 100 else init_data
+                }
             }), 401
 
         # Витягуємо реферальний код
@@ -137,15 +195,21 @@ def telegram_login():
         else:
             # Створюємо нового користувача
             logger.info(f"🔴 AUTH: Creating new user for telegram_id: {telegram_id}")
+            logger.info(f"🔴 AUTH: User data for creation: {telegram_data}")
 
             user = User.create(telegram_data, referral_code)
 
             if not user:
                 logger.error("🔴 AUTH: Failed to create user")
+                logger.error(f"🔴 AUTH: Creation data: {telegram_data}")
                 return jsonify({
                     'success': False,
                     'error': 'Failed to create user',
-                    'code': 'USER_CREATION_FAILED'
+                    'code': 'USER_CREATION_FAILED',
+                    'debug': {
+                        'telegram_id': telegram_id,
+                        'telegram_data_keys': list(telegram_data.keys())
+                    }
                 }), 500
 
             logger.info(f"🔴 AUTH: New user created - ID: {user.id}, telegram_id: {user.telegram_id}")
@@ -154,34 +218,53 @@ def telegram_login():
         logger.info("🔴 AUTH: Generating tokens...")
         user_dict = user.to_dict()
         logger.info(f"🔴 AUTH: User dict keys: {list(user_dict.keys())}")
+        logger.info(f"🔴 AUTH: User dict id: {user_dict.get('id')}")
+        logger.info(f"🔴 AUTH: User dict telegram_id: {user_dict.get('telegram_id')}")
 
-        tokens = create_tokens_pair(user_dict)
-        logger.info(f"🔴 AUTH: Tokens generated: {list(tokens.keys())}")
-        logger.info(f"🔴 AUTH: Access token length: {len(tokens['access_token'])}")
-        logger.info(f"🔴 AUTH: Refresh token length: {len(tokens['refresh_token'])}")
-        logger.info(f"🔴 AUTH: Token expires in: {tokens['expires_in']} seconds")
+        try:
+            tokens = create_tokens_pair(user_dict)
+            logger.info(f"🔴 AUTH: Tokens generated successfully")
+            logger.info(f"🔴 AUTH: Token keys: {list(tokens.keys())}")
+            logger.info(f"🔴 AUTH: Access token length: {len(tokens['access_token'])}")
+            logger.info(f"🔴 AUTH: Refresh token length: {len(tokens['refresh_token'])}")
+            logger.info(f"🔴 AUTH: Token expires in: {tokens['expires_in']} seconds")
+        except Exception as e:
+            logger.error(f"🔴 AUTH: Token generation failed: {e}", exc_info=True)
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate tokens',
+                'code': 'TOKEN_GENERATION_FAILED'
+            }), 500
 
         # Створюємо сесію
         logger.info("🔴 AUTH: Creating user session...")
-        # Для отримання JTI декодуємо токени
-        access_payload = decode_token(tokens['access_token'], verify_exp=False)[1]
-        refresh_payload = decode_token(tokens['refresh_token'], verify_exp=False)[1]
+        try:
+            # Для отримання JTI декодуємо токени
+            access_payload = decode_token(tokens['access_token'], verify_exp=False)[1]
+            refresh_payload = decode_token(tokens['refresh_token'], verify_exp=False)[1]
 
-        logger.info(f"🔴 AUTH: Access token JTI: {access_payload['jti']}")
-        logger.info(f"🔴 AUTH: Refresh token JTI: {refresh_payload['jti']}")
+            if not access_payload or not refresh_payload:
+                logger.error("🔴 AUTH: Failed to decode tokens for session")
+                raise Exception("Token decode failed")
 
-        session = UserSession.create(
-            user_id=user.id,
-            access_jti=access_payload['jti'],
-            refresh_jti=refresh_payload['jti'],
-            ip_address=request.remote_addr,
-            user_agent=request.headers.get('User-Agent', ''),
-            expires_at=datetime.fromtimestamp(refresh_payload['exp'], tz=timezone.utc)
-        )
+            logger.info(f"🔴 AUTH: Access token JTI: {access_payload.get('jti')}")
+            logger.info(f"🔴 AUTH: Refresh token JTI: {refresh_payload.get('jti')}")
 
-        logger.info(f"🔴 AUTH: Session created: {bool(session)}")
-        if session:
-            logger.info(f"🔴 AUTH: Session ID: {session.id}")
+            session = UserSession.create(
+                user_id=user.id,
+                access_jti=access_payload['jti'],
+                refresh_jti=refresh_payload['jti'],
+                ip_address=request.remote_addr or '0.0.0.0',
+                user_agent=request.headers.get('User-Agent', ''),
+                expires_at=datetime.fromtimestamp(refresh_payload['exp'], tz=timezone.utc)
+            )
+
+            logger.info(f"🔴 AUTH: Session created: {bool(session)}")
+            if session:
+                logger.info(f"🔴 AUTH: Session ID: {session.id}")
+        except Exception as e:
+            logger.error(f"🔴 AUTH: Session creation failed: {e}", exc_info=True)
+            # Продовжуємо без сесії
 
         # Формуємо відповідь
         response_data = {
@@ -196,18 +279,26 @@ def telegram_login():
         logger.info("🔴 AUTH: Response prepared successfully")
         logger.info(f"🔴 AUTH: Response user keys: {list(response_data['data']['user'].keys())}")
         logger.info(f"🔴 AUTH: Response token keys: {list(response_data['data']['tokens'].keys())}")
+        logger.info(f"🔴 AUTH: User display name: {user.get_display_name()}")
+        logger.info("🔴 AUTH: ========== TELEGRAM LOGIN SUCCESS ==========")
 
         return jsonify(response_data), 200
 
     except Exception as e:
-        logger.error(f"🔴 AUTH: Telegram login error: {e}", exc_info=True)
+        logger.error(f"🔴 AUTH: ========== TELEGRAM LOGIN ERROR ==========")
         logger.error(f"🔴 AUTH: Error type: {type(e).__name__}")
+        logger.error(f"🔴 AUTH: Error message: {str(e)}")
         logger.error(f"🔴 AUTH: Error args: {e.args}")
+        logger.error("🔴 AUTH: Full traceback:", exc_info=True)
 
         return jsonify({
             'success': False,
             'error': ERROR_MESSAGES.get('INTERNAL_ERROR', 'Internal server error'),
-            'code': 'LOGIN_ERROR'
+            'code': 'LOGIN_ERROR',
+            'debug': {
+                'error_type': type(e).__name__,
+                'error_message': str(e)
+            }
         }), 500
 
 
@@ -216,21 +307,6 @@ def telegram_login():
 def refresh_token():
     """
     Оновити access token використовуючи refresh token
-
-    Request body:
-    {
-        "refresh_token": "..."
-    }
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "access_token": "...",
-            "token_type": "Bearer",
-            "expires_in": 86400
-        }
-    }
     """
     logger.info("🔴 AUTH: /refresh endpoint called")
 
@@ -283,15 +359,6 @@ def refresh_token():
 def logout():
     """
     Вийти з системи (відкликати токени)
-
-    Headers:
-    Authorization: Bearer <access_token>
-
-    Response:
-    {
-        "success": true,
-        "message": "Logged out successfully"
-    }
     """
     logger.info("🔴 AUTH: /logout endpoint called")
     logger.info(f"🔴 AUTH: Current user: {g.current_user.telegram_id if hasattr(g, 'current_user') else 'Unknown'}")
@@ -343,17 +410,6 @@ def logout():
 def get_current_user():
     """
     Отримати дані поточного користувача
-
-    Headers:
-    Authorization: Bearer <access_token>
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "user": {...}
-        }
-    }
     """
     logger.info("🔴 AUTH: /me endpoint called")
     logger.info(f"🔴 AUTH: Current user ID: {g.current_user.id}")
@@ -384,30 +440,6 @@ def get_current_user():
 def update_current_user():
     """
     Оновити дані поточного користувача
-
-    Headers:
-    Authorization: Bearer <access_token>
-
-    Request body:
-    {
-        "username": "new_username",
-        "first_name": "John",
-        "last_name": "Doe",
-        "language_code": "uk",
-        "settings": {
-            "notifications": true,
-            "language": "uk"
-        }
-    }
-
-    Response:
-    {
-        "success": true,
-        "message": "User updated successfully",
-        "data": {
-            "user": {...}
-        }
-    }
     """
     logger.info("🔴 AUTH: /me PUT endpoint called")
 
@@ -467,18 +499,6 @@ def update_current_user():
 def verify_token():
     """
     Перевірити валідність токена
-
-    Headers:
-    Authorization: Bearer <access_token> (опціонально)
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "valid": true,
-            "user": {...}  // якщо токен валідний
-        }
-    }
     """
     logger.info("🔴 AUTH: /verify endpoint called")
     logger.info(f"🔴 AUTH: Has current_user: {hasattr(g, 'current_user') and g.current_user is not None}")
@@ -516,26 +536,6 @@ def verify_token():
 def get_sessions():
     """
     Отримати активні сесії користувача
-
-    Headers:
-    Authorization: Bearer <access_token>
-
-    Response:
-    {
-        "success": true,
-        "data": {
-            "sessions": [
-                {
-                    "id": "...",
-                    "ip_address": "...",
-                    "user_agent": "...",
-                    "created_at": "...",
-                    "expires_at": "...",
-                    "is_current": true
-                }
-            ]
-        }
-    }
     """
     logger.info("🔴 AUTH: /sessions endpoint called")
 
@@ -579,15 +579,6 @@ def get_sessions():
 def revoke_session(session_id):
     """
     Відкликати конкретну сесію
-
-    Headers:
-    Authorization: Bearer <access_token>
-
-    Response:
-    {
-        "success": true,
-        "message": "Session revoked successfully"
-    }
     """
     logger.info(f"🔴 AUTH: /sessions/{session_id} DELETE endpoint called")
 
@@ -627,6 +618,24 @@ def revoke_session(session_id):
             'error': ERROR_MESSAGES.get('INTERNAL_ERROR', 'Internal server error'),
             'code': 'REVOKE_ERROR'
         }), 500
+
+
+# Тестовий endpoint для debug
+@auth_bp.route('/test', methods=['GET', 'POST'])
+def test_endpoint():
+    """Тестовий endpoint для перевірки роботи"""
+    logger.info("🔴 AUTH: Test endpoint called")
+
+    return jsonify({
+        'success': True,
+        'message': 'Auth module is working',
+        'data': {
+            'method': request.method,
+            'headers': dict(request.headers),
+            'has_json': request.is_json,
+            'content_type': request.content_type
+        }
+    }), 200
 
 
 # Логування при імпорті модуля

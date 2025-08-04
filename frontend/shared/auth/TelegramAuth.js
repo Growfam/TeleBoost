@@ -1,7 +1,7 @@
 // frontend/shared/auth/TelegramAuth.js
 /**
  * Компонент автоматичної Telegram авторизації для TeleBoost
- * Production версія з покращеною діагностикою initData
+ * Production версія з виправленням initData
  */
 
 import { getIcon } from '../ui/svg.js';
@@ -200,6 +200,26 @@ const styles = `
   box-shadow: 0 8px 24px rgba(0, 136, 204, 0.3);
 }
 
+.manual-auth-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #0088cc 0%, #0077bb 100%);
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 20px;
+}
+
+.manual-auth-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 136, 204, 0.3);
+}
+
 .debug-info {
   margin-top: 20px;
   padding: 16px;
@@ -239,7 +259,7 @@ export class TelegramAuth {
 
     this.element = null;
     this.authAttempts = 0;
-    this.maxAuthAttempts = 15; // Збільшуємо кількість спроб
+    this.maxAuthAttempts = 3;
   }
 
   /**
@@ -332,6 +352,12 @@ export class TelegramAuth {
         <div class="auth-error">
           ${this.state.error}
         </div>
+        ${this.state.showManualAuth ? `
+          <button class="manual-auth-button" onclick="window.telegramAuth.manualAuth()">
+            ${getIcon('telegram', '', 20)}
+            <span>Спробувати знову</span>
+          </button>
+        ` : ''}
       `;
     }
 
@@ -350,7 +376,7 @@ export class TelegramAuth {
     return `
       <div class="auth-loading">
         <div class="loading-spinner"></div>
-        <div class="loading-text">Авторизація... (спроба ${this.authAttempts}/${this.maxAuthAttempts})</div>
+        <div class="loading-text">Авторизація...</div>
       </div>
     `;
   }
@@ -363,6 +389,9 @@ export class TelegramAuth {
     if (!this.element) {
       return;
     }
+
+    // Зберігаємо посилання на компонент глобально для onclick обробників
+    window.telegramAuth = this;
 
     // Діагностика Telegram WebApp
     this.diagnoseTelegramWebApp();
@@ -390,16 +419,12 @@ export class TelegramAuth {
       this.addDebugInfo(`Platform: ${tg.platform}`);
       this.addDebugInfo(`ColorScheme: ${tg.colorScheme}`);
       this.addDebugInfo(`IsExpanded: ${tg.isExpanded}`);
-      this.addDebugInfo(`ViewportHeight: ${tg.viewportHeight}`);
 
-      // Перевіряємо initData різними способами
+      // Перевіряємо initData
       this.addDebugInfo(`initData exists: ${!!tg.initData}`);
       this.addDebugInfo(`initData length: ${tg.initData ? tg.initData.length : 0}`);
 
-      if (tg.initData) {
-        this.addDebugInfo(`initData preview: ${tg.initData.substring(0, 50)}...`);
-      }
-
+      // Перевіряємо initDataUnsafe
       this.addDebugInfo(`initDataUnsafe exists: ${!!tg.initDataUnsafe}`);
       if (tg.initDataUnsafe) {
         this.addDebugInfo(`initDataUnsafe keys: ${Object.keys(tg.initDataUnsafe).join(', ')}`);
@@ -408,11 +433,17 @@ export class TelegramAuth {
           this.addDebugInfo(`Username: ${tg.initDataUnsafe.user.username}`);
           this.addDebugInfo(`First name: ${tg.initDataUnsafe.user.first_name}`);
         }
+        if (tg.initDataUnsafe.auth_date) {
+          this.addDebugInfo(`Auth date: ${tg.initDataUnsafe.auth_date}`);
+        }
+        if (tg.initDataUnsafe.hash) {
+          this.addDebugInfo(`Hash exists: true`);
+        }
       }
     }
 
     // Визначаємо чи це Telegram WebApp
-    this.state.isTelegramWebApp = !!(tg && (tg.initData || tg.platform !== 'unknown'));
+    this.state.isTelegramWebApp = !!(tg && (tg.initData || tg.initDataUnsafe?.user));
     this.addDebugInfo(`Is Telegram WebApp: ${this.state.isTelegramWebApp}`);
   }
 
@@ -420,47 +451,130 @@ export class TelegramAuth {
    * Початок процесу авторизації
    */
   startAuthProcess() {
-    // Чекаємо коли initData буде готова
-    this.waitForInitData();
+    const tg = window.Telegram?.WebApp;
+
+    // Якщо є initData - використовуємо її
+    if (tg?.initData) {
+      this.addDebugInfo('initData is available!');
+      this.performAutoAuth();
+      return;
+    }
+
+    // Якщо initData немає, але є initDataUnsafe - створюємо initData вручну
+    if (tg?.initDataUnsafe?.user) {
+      this.addDebugInfo('No initData, but initDataUnsafe exists - creating initData manually');
+      this.createInitDataFromUnsafe();
+      return;
+    }
+
+    // Інакше показуємо помилку
+    this.setState({
+      error: 'Не вдалося отримати дані від Telegram. Переконайтесь, що відкрили додаток через офіційного бота.',
+      isLoading: false,
+      showManualAuth: true
+    });
   }
 
   /**
-   * Очікування initData
+   * Створити initData з initDataUnsafe
    */
-  waitForInitData() {
-    const checkInterval = setInterval(() => {
-      this.authAttempts++;
+  createInitDataFromUnsafe() {
+    const tg = window.Telegram?.WebApp;
+    const unsafe = tg.initDataUnsafe;
 
-      const tg = window.Telegram?.WebApp;
-      this.addDebugInfo(`Auth attempt ${this.authAttempts}: initData = ${!!tg?.initData}`);
+    if (!unsafe || !unsafe.user) {
+      this.setState({
+        error: 'Не вдалося отримати дані користувача',
+        isLoading: false
+      });
+      return;
+    }
 
-      // Оновлюємо UI
-      if (this.element) {
-        this.element.innerHTML = this.render();
+    try {
+      // Створюємо параметри для initData
+      const params = [];
+
+      // Обов'язкові поля в правильному порядку
+      if (unsafe.auth_date) {
+        params.push(`auth_date=${unsafe.auth_date}`);
+      } else {
+        // Якщо немає auth_date, використовуємо поточний час
+        params.push(`auth_date=${Math.floor(Date.now() / 1000)}`);
       }
 
-      if (tg?.initData) {
-        this.addDebugInfo(`initData found! Length: ${tg.initData.length}`);
-        clearInterval(checkInterval);
-        this.performAutoAuth();
-        return;
+      // chat_instance
+      if (unsafe.chat_instance) {
+        params.push(`chat_instance=${unsafe.chat_instance}`);
       }
 
-      if (this.authAttempts >= this.maxAuthAttempts) {
-        this.addDebugInfo('Max attempts reached, showing error');
-        clearInterval(checkInterval);
-
-        // Показуємо помилку з рекомендаціями
-        this.setState({
-          error: `Не вдалося отримати дані від Telegram. 
-                  Спробуйте: 
-                  1) Закрити та відкрити додаток знову
-                  2) Перезапустити Telegram
-                  3) Переконатись що відкриваєте через кнопку в боті`,
-          isLoading: false
-        });
+      // chat_type
+      if (unsafe.chat_type) {
+        params.push(`chat_type=${unsafe.chat_type}`);
       }
-    }, 500); // Перевіряємо кожні 500мс
+
+      // hash - обов'язкове поле
+      if (unsafe.hash) {
+        params.push(`hash=${unsafe.hash}`);
+      }
+
+      // start_param
+      if (unsafe.start_param) {
+        params.push(`start_param=${unsafe.start_param}`);
+      }
+
+      // user - серіалізуємо в JSON
+      if (unsafe.user) {
+        const userJson = JSON.stringify(unsafe.user);
+        params.push(`user=${encodeURIComponent(userJson)}`);
+      }
+
+      // Сортуємо параметри алфавітно (крім hash)
+      const sortedParams = params.filter(p => !p.startsWith('hash=')).sort();
+      const hashParam = params.find(p => p.startsWith('hash='));
+      if (hashParam) {
+        sortedParams.push(hashParam);
+      }
+
+      // Формуємо initData
+      const initData = sortedParams.join('&');
+
+      this.addDebugInfo(`Created initData: ${initData.substring(0, 100)}...`);
+
+      // Зберігаємо в tg об'єкт
+      tg.initData = initData;
+
+      // Виконуємо авторизацію
+      this.performAutoAuth();
+
+    } catch (error) {
+      this.addDebugInfo(`Error creating initData: ${error.message}`);
+      this.setState({
+        error: 'Помилка формування даних авторизації',
+        isLoading: false,
+        showManualAuth: true
+      });
+    }
+  }
+
+  /**
+   * Ручна авторизація (для кнопки "Спробувати знову")
+   */
+  manualAuth() {
+    this.setState({
+      isLoading: true,
+      error: null,
+      showManualAuth: false
+    });
+
+    // Оновлюємо UI
+    if (this.element) {
+      this.element.innerHTML = this.render();
+    }
+
+    // Пробуємо знову
+    setTimeout(() => {
+      this.startAuthProcess();
+    }, 500);
   }
 
   /**
@@ -475,9 +589,10 @@ export class TelegramAuth {
       }
 
       this.addDebugInfo('Sending auth request to backend...');
+      this.addDebugInfo(`API URL: ${window.CONFIG?.API_URL || '/api'}`);
 
       // Відправляємо на backend
-      const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/telegram`, {
+      const response = await fetch(`${window.CONFIG?.API_URL || '/api'}/auth/telegram`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -529,7 +644,8 @@ export class TelegramAuth {
 
       this.setState({
         error: err.message,
-        isLoading: false
+        isLoading: false,
+        showManualAuth: true
       });
 
       this.options.onError(err);
@@ -553,6 +669,7 @@ export class TelegramAuth {
     if (this.element) {
       this.element.innerHTML = '';
     }
+    window.telegramAuth = null;
   }
 }
 
