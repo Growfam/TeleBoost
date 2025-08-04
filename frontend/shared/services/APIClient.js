@@ -448,4 +448,4 @@ window.addEventListener('auth:logout', () => {
   window.location.href = '/login';
 });
 
-export default apiCl
+export default apiClient
