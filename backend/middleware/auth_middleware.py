@@ -274,7 +274,7 @@ class AuthMiddleware:
         """Get user with caching"""
         try:
             # Try cache first
-            cache_key = CACHE_KEYS.format(CACHE_KEYS.USER, user_id=user_id)
+            cache_key = CACHE_KEYS['USER'].format(user_id=user_id)  # ← ЗМІНІТЬ НА ЦЕ
             cached_user = redis_client.get(cache_key, data_type='json')
 
             if cached_user:
