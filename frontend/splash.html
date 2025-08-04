@@ -250,7 +250,9 @@
     <!-- Debug info -->
     <div class="debug-info" id="debug-info"></div>
 
-    <script>
+    <script type="module">
+        import telegramWebApp from '/frontend/shared/services/TelegramWebApp.js';
+
         // Debug mode
         const isDebug = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         const debugInfo = [];
@@ -267,73 +269,16 @@
             }
         }
 
-        // Ініціалізація Telegram Web App
-        function initTelegramWebApp() {
-            addDebugInfo('Initializing Telegram WebApp...');
-
-            if (window.Telegram?.WebApp) {
-                const tg = window.Telegram.WebApp;
-
-                // Діагностика перед ready()
-                addDebugInfo(`Before ready() - Platform: ${tg.platform}, Version: ${tg.version}`);
-
-                // НЕ викликаємо ready() одразу - чекаємо повного завантаження
-                return new Promise((resolve) => {
-                    // Чекаємо на повне завантаження DOM та скриптів
-                    if (document.readyState === 'complete') {
-                        setTimeout(() => {
-                            try {
-                                tg.ready();
-                                addDebugInfo('Called tg.ready() after delay');
-
-                                // Налаштування теми
-                                tg.expand();
-                                tg.setHeaderColor('#1a0033');
-                                tg.setBackgroundColor('#000000');
-
-                                addDebugInfo(`After ready() - initData exists: ${!!tg.initData}`);
-                                resolve();
-                            } catch (e) {
-                                addDebugInfo(`Error calling tg.ready(): ${e.message}`);
-                                resolve();
-                            }
-                        }, 300); // Даємо 300мс на повну ініціалізацію
-                    } else {
-                        window.addEventListener('load', () => {
-                            setTimeout(() => {
-                                try {
-                                    tg.ready();
-                                    addDebugInfo('Called tg.ready() after window load');
-
-                                    // Налаштування теми
-                                    tg.expand();
-                                    tg.setHeaderColor('#1a0033');
-                                    tg.setBackgroundColor('#000000');
-
-                                    addDebugInfo(`After ready() - initData exists: ${!!tg.initData}`);
-                                    resolve();
-                                } catch (e) {
-                                    addDebugInfo(`Error calling tg.ready(): ${e.message}`);
-                                    resolve();
-                                }
-                            }, 300);
-                        });
-                    }
-                });
-            } else {
-                addDebugInfo('Telegram WebApp not available');
-                return Promise.resolve();
-            }
-        }
-
         // Швидка перевірка авторизації
         async function checkAuth() {
             try {
-                const MINIMUM_SPLASH_TIME = 1500; // Збільшено до 1.5 секунди
+                const MINIMUM_SPLASH_TIME = 2000; // 2 секунди
                 const startTime = Date.now();
 
-                // Ініціалізуємо Telegram
-                await initTelegramWebApp();
+                // Ініціалізуємо Telegram WebApp через сервіс
+                addDebugInfo('Initializing Telegram WebApp...');
+                const initialized = await telegramWebApp.init();
+                addDebugInfo(`Telegram WebApp initialized: ${initialized}`);
 
                 // Перевіряємо збережену авторизацію
                 const authData = JSON.parse(localStorage.getItem('auth') || '{}');
@@ -359,7 +304,9 @@
             } catch (error) {
                 addDebugInfo(`Auth check error: ${error.message}`);
                 // При помилці - на логін
-                window.location.href = '/login';
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 1000);
             }
         }
 
@@ -375,12 +322,8 @@
             }, waitTime);
         }
 
-        // Запускаємо перевірку коли DOM готовий
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', checkAuth);
-        } else {
-            checkAuth();
-        }
+        // Запускаємо перевірку
+        checkAuth();
 
         // Fallback редірект
         setTimeout(() => {
@@ -388,7 +331,7 @@
                 addDebugInfo('Fallback redirect to /login');
                 window.location.href = '/login';
             }
-        }, 5000); // Збільшено до 5 секунд
+        }, 10000); // 10 секунд
     </script>
 </body>
 </html>

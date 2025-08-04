@@ -1,12 +1,12 @@
 // frontend/pages/login/login.js
 /**
  * Сторінка автоматичного входу TeleBoost
- * Production версія
- * FIXED: Додано виклик tg.ready() та повна діагностика
+ * Production версія з використанням централізованого TelegramWebApp сервісу
  */
 
 import TelegramAuth from '/frontend/shared/auth/TelegramAuth.js';
 import { ToastProvider } from '/frontend/shared/components/Toast.js';
+import telegramWebApp from '/frontend/shared/services/TelegramWebApp.js';
 
 class LoginPage {
   constructor() {
@@ -39,8 +39,13 @@ class LoginPage {
       return; // Вже перенаправили
     }
 
-    // Ініціалізуємо Telegram Web App з повною діагностикою
-    await this.initTelegram();
+    // Ініціалізуємо Telegram Web App через сервіс
+    this.addDebugInfo('Initializing Telegram WebApp service...');
+    const initialized = await telegramWebApp.init();
+    this.addDebugInfo(`TelegramWebApp service initialized: ${initialized}`);
+
+    // Діагностика після ініціалізації
+    this.diagnoseTelegramEnvironment();
 
     // Створюємо компонент автоматичної авторизації
     this.initAuthComponent();
@@ -73,115 +78,45 @@ class LoginPage {
   }
 
   /**
-   * Ініціалізація Telegram Web App
-   */
-  async initTelegram() {
-    this.addDebugInfo('Initializing Telegram WebApp...');
-
-    if (window.Telegram?.WebApp) {
-      const tg = window.Telegram.WebApp;
-
-      // Діагностика перед ready()
-      this.addDebugInfo(`Before ready() - Platform: ${tg.platform}, Version: ${tg.version}`);
-      this.addDebugInfo(`Before ready() - initData exists: ${!!tg.initData}`);
-      this.addDebugInfo(`Before ready() - initDataUnsafe exists: ${!!tg.initDataUnsafe}`);
-
-      // Викликаємо ready() і чекаємо трохи
-      try {
-        tg.ready();
-        this.addDebugInfo('Called tg.ready()');
-
-        // Чекаємо 100мс після ready()
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Повторна діагностика після ready()
-        this.addDebugInfo(`After ready() - initData exists: ${!!tg.initData}`);
-        this.addDebugInfo(`After ready() - initData length: ${tg.initData ? tg.initData.length : 0}`);
-
-        // Встановлюємо тему та розширюємо
-        tg.expand();
-        tg.setHeaderColor('#1a0033');
-        tg.setBackgroundColor('#000000');
-
-        this.addDebugInfo('Telegram WebApp configured successfully');
-
-        // Якщо все ще немає initData, спробуємо ще раз через секунду
-        if (!tg.initData) {
-          this.addDebugInfo('No initData after ready(), waiting 1 second...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
-          // Викликаємо ready() ще раз
-          tg.ready();
-          this.addDebugInfo('Called tg.ready() again');
-
-          // Фінальна перевірка
-          this.addDebugInfo(`Final check - initData exists: ${!!tg.initData}`);
-        }
-
-      } catch (e) {
-        this.addDebugInfo(`Error during Telegram init: ${e.message}`);
-      }
-
-      // Додаткова діагностика середовища
-      this.diagnoseTelegramEnvironment();
-
-    } else {
-      this.addDebugInfo('Telegram WebApp not available');
-    }
-  }
-
-  /**
    * Діагностика Telegram середовища
    */
   diagnoseTelegramEnvironment() {
-    const tg = window.Telegram?.WebApp;
-    if (!tg) return;
+    const tg = telegramWebApp.getTelegramWebApp();
+    if (!tg) {
+      this.addDebugInfo('Telegram WebApp not available');
+      return;
+    }
 
-    // Перевіряємо всі доступні властивості
-    const properties = [
-      'initData',
-      'initDataUnsafe',
-      'version',
-      'platform',
-      'colorScheme',
-      'themeParams',
-      'isExpanded',
-      'viewportHeight',
-      'viewportStableHeight',
-      'headerColor',
-      'backgroundColor',
-      'isClosingConfirmationEnabled',
-      'MainButton',
-      'BackButton'
-    ];
+    // Основні властивості
+    this.addDebugInfo(`Platform: ${tg.platform}`);
+    this.addDebugInfo(`Version: ${tg.version}`);
+    this.addDebugInfo(`ColorScheme: ${tg.colorScheme}`);
+    this.addDebugInfo(`IsExpanded: ${tg.isExpanded}`);
+    this.addDebugInfo(`ViewportHeight: ${tg.viewportHeight}`);
 
-    this.addDebugInfo('=== Telegram WebApp Properties ===');
-    properties.forEach(prop => {
-      try {
-        const value = tg[prop];
-        const type = typeof value;
-        if (type === 'object' && value !== null) {
-          this.addDebugInfo(`${prop}: ${JSON.stringify(value)}`);
-        } else if (type === 'string' && value.length > 100) {
-          this.addDebugInfo(`${prop}: [string, length: ${value.length}]`);
-        } else {
-          this.addDebugInfo(`${prop}: ${value} (${type})`);
-        }
-      } catch (e) {
-        this.addDebugInfo(`${prop}: [Error: ${e.message}]`);
+    // Дані ініціалізації
+    const initData = telegramWebApp.getInitData();
+    const initDataUnsafe = telegramWebApp.getInitDataUnsafe();
+
+    this.addDebugInfo(`InitData exists: ${!!initData}`);
+    this.addDebugInfo(`InitData length: ${initData ? initData.length : 0}`);
+
+    if (initDataUnsafe) {
+      this.addDebugInfo(`InitDataUnsafe keys: ${Object.keys(initDataUnsafe).join(', ')}`);
+      if (initDataUnsafe.user) {
+        this.addDebugInfo(`User ID: ${initDataUnsafe.user.id}`);
+        this.addDebugInfo(`Username: ${initDataUnsafe.user.username}`);
+        this.addDebugInfo(`First name: ${initDataUnsafe.user.first_name}`);
       }
-    });
+    }
 
-    // Перевіряємо методи
-    const methods = ['ready', 'expand', 'close', 'sendData', 'openLink', 'openTelegramLink'];
-    this.addDebugInfo('=== Telegram WebApp Methods ===');
-    methods.forEach(method => {
-      this.addDebugInfo(`${method}: ${typeof tg[method]}`);
-    });
+    // Перевірка чи це Telegram WebApp
+    const isTelegramWebApp = telegramWebApp.isTelegramWebApp();
+    this.addDebugInfo(`Is Telegram WebApp: ${isTelegramWebApp}`);
 
-    // Виводимо debug інформацію в консоль у зручному форматі
+    // Виводимо debug інформацію в консоль
     if (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')) {
-      console.groupCollapsed('📱 Telegram WebApp Debug Info');
+      console.groupCollapsed('📱 LoginPage Debug Info');
       this.debugInfo.forEach(line => console.log(line));
       console.groupEnd();
     }

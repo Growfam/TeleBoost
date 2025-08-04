@@ -1,11 +1,11 @@
 // frontend/shared/auth/TelegramAuth.js
 /**
  * Компонент автоматичної Telegram авторизації для TeleBoost
- * Production версія з покращеною діагностикою initData
- * FIXED: Збільшено кількість спроб, додано platform check, покращено логування
+ * Production версія з використанням централізованого TelegramWebApp сервісу
  */
 
 import { getIcon } from '../ui/svg.js';
+import telegramWebApp from '../services/TelegramWebApp.js';
 
 // Стилі для компонента
 const styles = `
@@ -257,8 +257,7 @@ export class TelegramAuth {
 
     this.element = null;
     this.authAttempts = 0;
-    this.maxAuthAttempts = 30; // Збільшено до 30 спроб як у FLEX
-    this.checkInterval = null;
+    this.maxAuthAttempts = 5;
   }
 
   /**
@@ -380,14 +379,14 @@ export class TelegramAuth {
   /**
    * Ініціалізація компонента
    */
-  init(containerId) {
+  async init(containerId) {
     this.element = document.getElementById(containerId);
     if (!this.element) {
       return;
     }
 
-    // Діагностика Telegram WebApp
-    this.diagnoseTelegramWebApp();
+    // Перевіряємо чи це Telegram WebApp
+    await this.checkTelegramWebApp();
 
     // Рендеримо компонент
     this.element.innerHTML = this.render();
@@ -399,55 +398,35 @@ export class TelegramAuth {
   }
 
   /**
-   * Діагностика Telegram WebApp
+   * Перевірка Telegram WebApp
    */
-  diagnoseTelegramWebApp() {
-    const tg = window.Telegram?.WebApp;
+  async checkTelegramWebApp() {
+    // Чекаємо ініціалізації TelegramWebApp сервісу
+    const initialized = await telegramWebApp.init();
+    this.addDebugInfo(`TelegramWebApp service initialized: ${initialized}`);
 
-    this.addDebugInfo(`window.Telegram exists: ${!!window.Telegram}`);
-    this.addDebugInfo(`window.Telegram.WebApp exists: ${!!tg}`);
+    const tg = telegramWebApp.getTelegramWebApp();
 
     if (tg) {
-      // Викликаємо ready() перед діагностикою
-      try {
-        tg.ready();
-        this.addDebugInfo('Called tg.ready()');
-      } catch (e) {
-        this.addDebugInfo(`Error calling tg.ready(): ${e.message}`);
-      }
-
       this.addDebugInfo(`Version: ${tg.version}`);
       this.addDebugInfo(`Platform: ${tg.platform}`);
-      this.addDebugInfo(`ColorScheme: ${tg.colorScheme}`);
-      this.addDebugInfo(`IsExpanded: ${tg.isExpanded}`);
-      this.addDebugInfo(`ViewportHeight: ${tg.viewportHeight}`);
 
-      // Перевіряємо initData різними способами
-      this.addDebugInfo(`initData exists: ${!!tg.initData}`);
-      this.addDebugInfo(`initData length: ${tg.initData ? tg.initData.length : 0}`);
-      this.addDebugInfo(`initData type: ${typeof tg.initData}`);
+      const initData = telegramWebApp.getInitData();
+      const initDataUnsafe = telegramWebApp.getInitDataUnsafe();
 
-      if (tg.initData) {
-        this.addDebugInfo(`initData preview: ${tg.initData.substring(0, 50)}...`);
-      }
+      this.addDebugInfo(`initData exists: ${!!initData}`);
+      this.addDebugInfo(`initData length: ${initData ? initData.length : 0}`);
 
-      this.addDebugInfo(`initDataUnsafe exists: ${!!tg.initDataUnsafe}`);
-      if (tg.initDataUnsafe) {
-        this.addDebugInfo(`initDataUnsafe keys: ${Object.keys(tg.initDataUnsafe).join(', ')}`);
-        if (tg.initDataUnsafe.user) {
-          this.addDebugInfo(`User ID: ${tg.initDataUnsafe.user.id}`);
-          this.addDebugInfo(`Username: ${tg.initDataUnsafe.user.username}`);
-          this.addDebugInfo(`First name: ${tg.initDataUnsafe.user.first_name}`);
+      if (initDataUnsafe) {
+        this.addDebugInfo(`initDataUnsafe keys: ${Object.keys(initDataUnsafe).join(', ')}`);
+        if (initDataUnsafe.user) {
+          this.addDebugInfo(`User ID: ${initDataUnsafe.user.id}`);
+          this.addDebugInfo(`Username: ${initDataUnsafe.user.username}`);
         }
       }
-
-      // Додаткові перевірки
-      this.addDebugInfo(`startParam: ${tg.initDataUnsafe?.start_param || 'none'}`);
-      this.addDebugInfo(`themeParams: ${JSON.stringify(tg.themeParams || {})}`);
     }
 
-    // ВАЖЛИВО: Перевіряємо platform !== 'unknown' як додатковий критерій
-    this.state.isTelegramWebApp = !!(tg && (tg.initData || tg.platform !== 'unknown'));
+    this.state.isTelegramWebApp = telegramWebApp.isTelegramWebApp();
     this.addDebugInfo(`Is Telegram WebApp: ${this.state.isTelegramWebApp}`);
   }
 
@@ -455,82 +434,8 @@ export class TelegramAuth {
    * Початок процесу авторизації
    */
   startAuthProcess() {
-    // Спочатку чекаємо трохи для повної ініціалізації
-    setTimeout(() => {
-      this.waitForInitData();
-    }, 500);
-  }
-
-  /**
-   * Очікування initData
-   */
-  waitForInitData() {
-    this.checkInterval = setInterval(() => {
-      this.authAttempts++;
-
-      const tg = window.Telegram?.WebApp;
-
-      // Пробуємо різні способи отримати initData
-      let initData = tg?.initData;
-
-      // Якщо немає initData, пробуємо викликати ready() ще раз
-      if (!initData && tg) {
-        try {
-          tg.ready();
-          this.addDebugInfo(`Retry tg.ready() at attempt ${this.authAttempts}`);
-          initData = tg.initData;
-        } catch (e) {
-          this.addDebugInfo(`Error retrying tg.ready(): ${e.message}`);
-        }
-      }
-
-      // Якщо все ще немає, перевіряємо через timeout
-      if (!initData && tg) {
-        // Спроба отримати через властивості об'єкта
-        for (let key in tg) {
-          if (key.toLowerCase().includes('init') && typeof tg[key] === 'string' && tg[key].length > 20) {
-            this.addDebugInfo(`Found potential initData in tg.${key}`);
-            initData = tg[key];
-            break;
-          }
-        }
-      }
-
-      this.addDebugInfo(`Auth attempt ${this.authAttempts}: initData = ${!!initData}`);
-
-      // Оновлюємо UI
-      if (this.element) {
-        this.element.innerHTML = this.render();
-      }
-
-      if (initData) {
-        this.addDebugInfo(`initData found! Length: ${initData.length}`);
-        clearInterval(this.checkInterval);
-        this.performAutoAuth();
-        return;
-      }
-
-      // Якщо є initDataUnsafe але немає initData - можливо проблема з WebView
-      if (this.authAttempts % 5 === 0 && tg?.initDataUnsafe?.user) {
-        this.addDebugInfo('Has initDataUnsafe but no initData - possible WebView issue');
-      }
-
-      if (this.authAttempts >= this.maxAuthAttempts) {
-        this.addDebugInfo('Max attempts reached, showing error');
-        clearInterval(this.checkInterval);
-
-        // Показуємо помилку з рекомендаціями
-        this.setState({
-          error: `Не вдалося отримати дані від Telegram. 
-                  Спробуйте: 
-                  1) Закрити та відкрити додаток знову
-                  2) Перезапустити Telegram
-                  3) Переконатись що відкриваєте через кнопку в боті
-                  4) Оновити Telegram до останньої версії`,
-          isLoading: false
-        });
-      }
-    }, 300); // Перевіряємо кожні 300мс
+    // Спробуємо авторизуватись одразу
+    this.performAutoAuth();
   }
 
   /**
@@ -538,10 +443,25 @@ export class TelegramAuth {
    */
   async performAutoAuth() {
     try {
-      const tg = window.Telegram?.WebApp;
+      this.authAttempts++;
 
-      if (!tg.initData) {
-        throw new Error('initData відсутня');
+      const initData = telegramWebApp.getInitData();
+
+      if (!initData) {
+        this.addDebugInfo(`Auth attempt ${this.authAttempts}: No initData`);
+
+        if (this.authAttempts < this.maxAuthAttempts) {
+          // Спробуємо ще раз через секунду
+          setTimeout(() => this.performAutoAuth(), 1000);
+
+          // Оновлюємо UI
+          if (this.element) {
+            this.element.innerHTML = this.render();
+          }
+          return;
+        } else {
+          throw new Error('Не вдалося отримати дані від Telegram. Спробуйте перезапустити додаток.');
+        }
       }
 
       this.addDebugInfo('Sending auth request to backend...');
@@ -553,8 +473,8 @@ export class TelegramAuth {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          initData: tg.initData,
-          referralCode: tg.initDataUnsafe?.start_param
+          initData: initData,
+          referralCode: telegramWebApp.getInitDataUnsafe()?.start_param
         })
       });
 
@@ -620,9 +540,6 @@ export class TelegramAuth {
    * Знищити компонент
    */
   destroy() {
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval);
-    }
     if (this.element) {
       this.element.innerHTML = '';
     }
