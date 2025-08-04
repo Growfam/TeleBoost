@@ -1,13 +1,13 @@
 // frontend/pages/home/home.js
 /**
  * Головна сторінка TeleBoost
- * Виправлена версія з правильною перевіркою авторизації
+ * Production версія
  */
 
 // Імпорти компонентів
 import Header from '/frontend/shared/components/Header.js';
 import Navigation from '/frontend/shared/components/Navigation.js';
-import { ToastProvider, useToast } from '/frontend/shared/components/Toast.js';
+import { ToastProvider } from '/frontend/shared/components/Toast.js';
 import AuthGuard from '/frontend/shared/auth/AuthGuard.js';
 
 // Імпорти сервісів
@@ -44,7 +44,6 @@ class HomePage {
 
     this.components = {};
     this.subscriptions = [];
-    this.authGuard = null;
   }
 
   /**
@@ -52,39 +51,18 @@ class HomePage {
    */
   async init() {
     try {
-      // Показуємо loader під час перевірки авторизації
-      this.authGuard = new AuthGuard({
-        isLoading: true
-      });
-      this.authGuard.show();
+      // Швидка перевірка авторизації
+      const authData = JSON.parse(localStorage.getItem('auth') || '{}');
 
-      // Ініціалізуємо Telegram Web App
-      this.initTelegram();
-
-      // Перевіряємо авторизацію
-      const authResult = await AuthGuard.check();
-
-      if (!authResult.isAuthenticated) {
-        console.log('User not authenticated, redirecting to login');
-
-        // Оновлюємо AuthGuard щоб показати unauthorized стан
-        this.authGuard.update({
-          isLoading: false,
-          isAuthenticated: false
-        });
-
-        // Даємо час побачити анімацію перед редіректом
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 1000);
+      if (!authData.access_token || !authData.user) {
+        window.location.href = '/login';
         return;
       }
 
-      this.state.user = authResult.user;
+      this.state.user = authData.user;
 
-      // Ховаємо AuthGuard
-      this.authGuard.hide();
-      this.authGuard = null;
+      // Ініціалізуємо Telegram Web App
+      this.initTelegram();
 
       // Ініціалізуємо компоненти
       this.initComponents();
@@ -105,18 +83,7 @@ class HomePage {
       }
 
     } catch (error) {
-      console.error('Failed to initialize home page:', error);
-
-      // Показуємо помилку в AuthGuard
-      if (this.authGuard) {
-        this.authGuard.update({
-          isLoading: false,
-          error: 'Помилка завантаження сторінки',
-          onRetry: () => window.location.reload()
-        });
-      } else {
-        this.showError('Помилка завантаження сторінки. Спробуйте оновити.');
-      }
+      this.showError('Помилка завантаження сторінки. Спробуйте оновити.');
     }
   }
 
@@ -126,15 +93,9 @@ class HomePage {
   initTelegram() {
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
-
-      // Розширюємо на весь екран
       tg.expand();
-
-      // Встановлюємо кольори
       tg.setHeaderColor('#1a0033');
       tg.setBackgroundColor('#000000');
-
-      // Готовність
       tg.ready();
     }
   }
@@ -206,7 +167,6 @@ class HomePage {
    */
   async loadInitialData() {
     try {
-      // Завантажуємо паралельно
       const promises = [
         this.loadUserBalance(),
         this.loadServices(),
@@ -259,7 +219,7 @@ class HomePage {
       }
 
     } catch (error) {
-      console.error('Failed to load initial data:', error);
+      // Ignore
     }
   }
 
@@ -271,18 +231,13 @@ class HomePage {
       const response = await AuthAPI.getMe();
 
       if (response.success && response.data?.user) {
-        // Оновлюємо дані користувача
         this.state.user = response.data.user;
-
-        // Кешуємо
         userCache.set('current_user', response.data.user, 300000);
-
         return { balance: response.data.user.balance || 0 };
       }
 
       return { balance: 0 };
     } catch (error) {
-      console.error('Failed to load user balance:', error);
       return { balance: 0 };
     }
   }
@@ -292,28 +247,25 @@ class HomePage {
    */
   async loadServices() {
     try {
-      // Перевіряємо кеш
       const cached = servicesCache.get('telegram_services');
       if (cached) {
         return cached;
       }
 
-      // Завантажуємо тільки Telegram сервіси
       const response = await ServicesAPI.getAll({
         category: 'telegram',
         active: true,
-        limit: 6 // Популярні сервіси
+        limit: 6
       });
 
       if (response.success && response.data?.services) {
         const services = response.data.services;
-        servicesCache.set('telegram_services', services, 3600000); // 1 година
+        servicesCache.set('telegram_services', services, 3600000);
         return services;
       }
 
       return [];
     } catch (error) {
-      console.error('Failed to load services:', error);
       return [];
     }
   }
@@ -323,13 +275,11 @@ class HomePage {
    */
   async loadOrders() {
     try {
-      // Перевіряємо кеш
       const cached = ordersCache.get(`user_orders_${this.state.user?.id}`);
       if (cached) {
         return cached;
       }
 
-      // Завантажуємо останні замовлення
       const response = await OrdersAPI.getAll({
         limit: 5,
         page: 1
@@ -337,13 +287,12 @@ class HomePage {
 
       if (response.success && response.data?.orders) {
         const orders = response.data.orders;
-        ordersCache.set(`user_orders_${this.state.user.id}`, orders, 180000); // 3 хвилини
+        ordersCache.set(`user_orders_${this.state.user.id}`, orders, 180000);
         return orders;
       }
 
       return [];
     } catch (error) {
-      console.error('Failed to load orders:', error);
       return [];
     }
   }
@@ -365,7 +314,6 @@ class HomePage {
 
       return this.state.stats;
     } catch (error) {
-      console.error('Failed to load stats:', error);
       return this.state.stats;
     }
   }
@@ -408,7 +356,6 @@ class HomePage {
 
     // Підписка на нові сповіщення
     const notificationUnsubscribe = RealtimeSubscriptions.onNewNotification((notification) => {
-      // Оновлюємо індикатор в навігації
       this.components.navigation.update({
         notifications: {
           orders: this.components.navigation.state.notifications.orders,
@@ -423,7 +370,6 @@ class HomePage {
    * Оновлення статистики
    */
   updateStats(stats) {
-    // Анімоване оновлення чисел
     this.animateValue('total-users', 0, stats.totalUsers, 2000);
     this.animateValue('total-orders', 0, stats.totalOrders, 2000);
 
@@ -470,8 +416,7 @@ class HomePage {
    * Обробники подій
    */
   handleMenuClick(isOpen) {
-    // Відкриття/закриття меню
-    console.log('Menu clicked:', isOpen);
+    // Menu handler
   }
 
   handleNavigate(item) {
@@ -524,7 +469,6 @@ class HomePage {
       mainContent.insertBefore(errorContainer, mainContent.firstChild);
     }
 
-    // Видаляємо через 5 секунд
     setTimeout(() => {
       errorContainer.remove();
     }, 5000);
@@ -534,11 +478,6 @@ class HomePage {
    * Очищення при знищенні
    */
   destroy() {
-    // Закриваємо AuthGuard якщо відкритий
-    if (this.authGuard) {
-      this.authGuard.hide();
-    }
-
     // Відписуємося від усіх підписок
     this.subscriptions.forEach(unsubscribe => {
       if (typeof unsubscribe === 'function') {

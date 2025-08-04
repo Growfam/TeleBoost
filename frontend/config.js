@@ -1,7 +1,7 @@
 // frontend/config.js
 /**
  * Глобальна конфігурація TeleBoost
- * Завантажується перед всіма іншими скриптами
+ * Production версія
  */
 
 window.CONFIG = {
@@ -17,21 +17,11 @@ window.CONFIG = {
 
   // Функції які відключені якщо Supabase не налаштований
   FEATURES: {
-    REALTIME: false, // Відключаємо realtime якщо Supabase не налаштований
+    REALTIME: false,
     PRESENCE: false,
     BROADCAST: false
   },
 
-  // Інші налаштування
-  DEBUG: true,
+  // Версія додатку
   VERSION: '1.0.0'
 };
-
-// Логування конфігурації в debug режимі
-if (window.CONFIG.DEBUG) {
-  console.log('TeleBoost Config loaded:', {
-    API: window.CONFIG.API_URL,
-    Bot: window.CONFIG.BOT_USERNAME,
-    Features: window.CONFIG.FEATURES
-  });
-}

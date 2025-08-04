@@ -1,6 +1,7 @@
 // frontend/shared/services/SupabaseClient.js
 /**
  * Supabase клієнт з заглушкою для випадків коли Supabase не налаштований
+ * Production версія
  */
 
 // Перевіряємо чи налаштований Supabase
@@ -13,7 +14,6 @@ let supabase = null;
 
 // Створюємо клієнт тільки якщо є правильна конфігурація
 if (isSupabaseConfigured) {
-  // Динамічний імпорт Supabase (потрібно додати скрипт в HTML)
   if (window.createClient) {
     supabase = window.createClient(window.CONFIG.SUPABASE_URL, window.CONFIG.SUPABASE_ANON_KEY, {
       auth: {
@@ -27,12 +27,8 @@ if (isSupabaseConfigured) {
         }
       }
     });
-  } else {
-    console.warn('Supabase library not loaded');
   }
 } else {
-  console.warn('Supabase not configured - realtime features disabled');
-
   // Заглушка для supabase
   supabase = {
     channel: () => ({
@@ -75,13 +71,11 @@ export { supabase };
  */
 export function subscribeToTable(table, callback, filters = {}) {
   if (!isSupabaseConfigured) {
-    console.warn('Supabase not configured - subscribeToTable disabled');
-    return () => {}; // Повертаємо пусту функцію unsubscribe
+    return () => {};
   }
 
   const channel = supabase.channel(`${table}_changes`);
 
-  // Базова підписка на всі зміни
   let subscription = channel.on(
     'postgres_changes',
     {
@@ -95,7 +89,6 @@ export function subscribeToTable(table, callback, filters = {}) {
     }
   );
 
-  // Підписка на конкретні події якщо вказані
   if (filters.events) {
     filters.events.forEach(event => {
       subscription = subscription.on(
@@ -113,14 +106,8 @@ export function subscribeToTable(table, callback, filters = {}) {
     });
   }
 
-  // Підписуємось
-  subscription.subscribe((status) => {
-    if (status === 'SUBSCRIBED') {
-      console.log(`Subscribed to ${table} changes`);
-    }
-  });
+  subscription.subscribe();
 
-  // Повертаємо функцію для відписки
   return () => {
     supabase.removeChannel(subscription);
   };
@@ -131,7 +118,6 @@ export function subscribeToTable(table, callback, filters = {}) {
  */
 export function subscribeToPresence(channelName, callbacks = {}) {
   if (!isSupabaseConfigured) {
-    console.warn('Supabase not configured - subscribeToPresence disabled');
     return {
       track: () => {},
       untrack: () => {},
@@ -142,7 +128,6 @@ export function subscribeToPresence(channelName, callbacks = {}) {
 
   const channel = supabase.channel(channelName);
 
-  // Підписка на sync
   if (callbacks.onSync) {
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState();
@@ -150,28 +135,24 @@ export function subscribeToPresence(channelName, callbacks = {}) {
     });
   }
 
-  // Підписка на join
   if (callbacks.onJoin) {
     channel.on('presence', { event: 'join' }, ({ key, newPresences }) => {
       callbacks.onJoin({ key, newPresences });
     });
   }
 
-  // Підписка на leave
   if (callbacks.onLeave) {
     channel.on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
       callbacks.onLeave({ key, leftPresences });
     });
   }
 
-  // Підписуємось на канал
   channel.subscribe(async (status) => {
     if (status === 'SUBSCRIBED' && callbacks.onSubscribed) {
       callbacks.onSubscribed();
     }
   });
 
-  // Функції для роботи з presence
   return {
     track: (data) => channel.track(data),
     untrack: () => channel.untrack(),
@@ -185,7 +166,6 @@ export function subscribeToPresence(channelName, callbacks = {}) {
  */
 export function subscribeToBroadcast(channelName, event, callback) {
   if (!isSupabaseConfigured) {
-    console.warn('Supabase not configured - subscribeToBroadcast disabled');
     return {
       send: () => {},
       unsubscribe: () => {}
@@ -200,7 +180,6 @@ export function subscribeToBroadcast(channelName, event, callback) {
     })
     .subscribe();
 
-  // Функція для відправки повідомлень
   const send = (data) => {
     channel.send({
       type: 'broadcast',
@@ -209,7 +188,6 @@ export function subscribeToBroadcast(channelName, event, callback) {
     });
   };
 
-  // Повертаємо функції
   return {
     send,
     unsubscribe: () => supabase.removeChannel(channel)
@@ -220,7 +198,6 @@ export function subscribeToBroadcast(channelName, event, callback) {
  * Database хелпери
  */
 export const Database = {
-  // SELECT запити
   async select(table, options = {}) {
     if (!isSupabaseConfigured) {
       return { data: [], count: 0 };
@@ -228,7 +205,6 @@ export const Database = {
 
     let query = supabase.from(table).select(options.select || '*');
 
-    // Фільтри
     if (options.filters) {
       Object.entries(options.filters).forEach(([key, value]) => {
         if (Array.isArray(value)) {
@@ -241,14 +217,12 @@ export const Database = {
       });
     }
 
-    // Сортування
     if (options.orderBy) {
       query = query.order(options.orderBy.column, {
         ascending: options.orderBy.ascending ?? true
       });
     }
 
-    // Пагінація
     if (options.limit) {
       query = query.limit(options.limit);
     }
@@ -262,7 +236,6 @@ export const Database = {
     return { data, count };
   },
 
-  // INSERT
   async insert(table, data) {
     if (!isSupabaseConfigured) {
       return null;
@@ -277,7 +250,6 @@ export const Database = {
     return result;
   },
 
-  // UPDATE
   async update(table, id, updates) {
     if (!isSupabaseConfigured) {
       return null;
@@ -293,7 +265,6 @@ export const Database = {
     return data;
   },
 
-  // DELETE
   async delete(table, id) {
     if (!isSupabaseConfigured) {
       return true;
@@ -308,7 +279,6 @@ export const Database = {
     return true;
   },
 
-  // RPC (stored procedures)
   async rpc(functionName, params = {}) {
     if (!isSupabaseConfigured) {
       return null;
@@ -325,7 +295,6 @@ export const Database = {
  * Storage хелпери
  */
 export const Storage = {
-  // Завантажити файл
   async upload(bucket, path, file, options = {}) {
     if (!isSupabaseConfigured) {
       return null;
@@ -343,7 +312,6 @@ export const Storage = {
     return data;
   },
 
-  // Отримати публічний URL
   getPublicUrl(bucket, path) {
     if (!isSupabaseConfigured) {
       return '';
@@ -356,7 +324,6 @@ export const Storage = {
     return data.publicUrl;
   },
 
-  // Створити підписаний URL
   async createSignedUrl(bucket, path, expiresIn = 3600) {
     if (!isSupabaseConfigured) {
       return '';
@@ -370,7 +337,6 @@ export const Storage = {
     return data.signedUrl;
   },
 
-  // Видалити файл
   async delete(bucket, paths) {
     if (!isSupabaseConfigured) {
       return true;
@@ -384,7 +350,6 @@ export const Storage = {
     return true;
   },
 
-  // Список файлів
   async list(bucket, path = '', options = {}) {
     if (!isSupabaseConfigured) {
       return [];
@@ -407,7 +372,6 @@ export const Storage = {
  * Auth хелпери (якщо використовується Supabase Auth)
  */
 export const Auth = {
-  // Отримати поточного користувача
   async getUser() {
     if (!isSupabaseConfigured) {
       return null;
@@ -418,7 +382,6 @@ export const Auth = {
     return user;
   },
 
-  // Оновити користувача
   async updateUser(updates) {
     if (!isSupabaseConfigured) {
       return null;
@@ -429,7 +392,6 @@ export const Auth = {
     return data;
   },
 
-  // Вийти
   async signOut() {
     if (!isSupabaseConfigured) {
       return true;

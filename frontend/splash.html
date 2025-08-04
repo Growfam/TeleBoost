@@ -170,40 +170,6 @@
             color: rgba(255, 255, 255, 0.6);
             letter-spacing: 0.5px;
         }
-
-        /* Error state */
-        .error-container {
-            display: none;
-            margin-top: 32px;
-            padding: 16px 24px;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 12px;
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        .error-text {
-            color: #fff;
-            font-size: 14px;
-            margin-bottom: 16px;
-        }
-
-        .retry-button {
-            padding: 8px 20px;
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 8px;
-            color: #fff;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .retry-button:hover {
-            background: rgba(239, 68, 68, 0.3);
-            transform: translateY(-1px);
-        }
     </style>
 </head>
 <body>
@@ -253,12 +219,6 @@
             </div>
             <div class="loading-text">Завантаження...</div>
         </div>
-
-        <!-- Error (hidden by default) -->
-        <div class="error-container" id="error">
-            <div class="error-text">Не вдалося завантажити додаток</div>
-            <button class="retry-button" onclick="location.reload()">Спробувати знову</button>
-        </div>
     </div>
 
     <script>
@@ -269,106 +229,33 @@
             tg.setHeaderColor('#1a0033');
             tg.setBackgroundColor('#000000');
             tg.ready();
-
-            // Логування для debug
-            if (window.CONFIG?.DEBUG) {
-                console.log('Telegram WebApp initialized:', {
-                    initData: tg.initData,
-                    user: tg.initDataUnsafe?.user,
-                    startParam: tg.initDataUnsafe?.start_param
-                });
-            }
         }
 
-        // Функція перевірки авторизації
+        // Швидка перевірка авторизації
         async function checkAuth() {
             try {
-                // Мінімальний час показу splash screen
-                const MINIMUM_SPLASH_TIME = 1500;
+                const MINIMUM_SPLASH_TIME = 1000;
                 const startTime = Date.now();
 
-                // Перевіряємо чи користувач відкрив додаток через Telegram
-                const isInTelegram = window.Telegram?.WebApp?.initData;
+                // Перевіряємо збережену авторизацію
+                const authData = JSON.parse(localStorage.getItem('auth') || '{}');
 
-                // Логування для debug
-                console.log('Checking auth...', {
-                    isInTelegram: !!isInTelegram,
-                    hasLocalStorage: !!localStorage
-                });
-
-                // Спробуємо отримати дані авторизації з localStorage
-                let authData = null;
-                try {
-                    const storedAuth = localStorage.getItem('auth');
-                    if (storedAuth) {
-                        authData = JSON.parse(storedAuth);
-                    }
-                } catch (e) {
-                    console.error('Failed to parse auth data:', e);
-                    localStorage.removeItem('auth');
-                }
-
-                // Перевіряємо валідність токена
-                const hasValidToken = !!(
-                    authData?.access_token &&
-                    authData.access_token !== 'undefined' &&
-                    authData.access_token !== 'null' &&
-                    authData.expires_at
-                );
-
-                if (hasValidToken) {
+                if (authData.access_token && authData.expires_at) {
                     const expiresAt = new Date(authData.expires_at);
-                    const now = new Date();
 
-                    if (expiresAt > now) {
-                        // Токен ще дійсний - пробуємо перевірити на сервері
-                        console.log('Found valid token, verifying...');
-
-                        try {
-                            const response = await fetch(`${window.CONFIG?.API_URL || ''}/auth/verify`, {
-                                method: 'GET',
-                                headers: {
-                                    'Authorization': `Bearer ${authData.access_token}`
-                                }
-                            });
-
-                            const data = await response.json();
-
-                            if (response.ok && data.success && data.data?.valid) {
-                                // Авторизований - йдемо на головну
-                                console.log('Token verified, redirecting to home...');
-                                await waitAndRedirect('/home', startTime, MINIMUM_SPLASH_TIME);
-                                return;
-                            } else {
-                                // Токен недійсний - очищаємо
-                                console.log('Token invalid:', data.error);
-                                localStorage.removeItem('auth');
-                            }
-                        } catch (error) {
-                            // Помилка мережі - якщо токен не прострочений, все одно йдемо на home
-                            console.error('Network error during verification:', error);
-                            if (expiresAt > new Date(Date.now() + 60000)) { // Якщо токен дійсний ще хоча б хвилину
-                                await waitAndRedirect('/home', startTime, MINIMUM_SPLASH_TIME);
-                                return;
-                            }
-                            localStorage.removeItem('auth');
-                        }
-                    } else {
-                        // Токен прострочений
-                        console.log('Token expired');
-                        localStorage.removeItem('auth');
+                    if (expiresAt > new Date()) {
+                        // Токен валідний - йдемо на головну
+                        await waitAndRedirect('/home', startTime, MINIMUM_SPLASH_TIME);
+                        return;
                     }
                 }
 
-                // Не авторизований або токен недійсний - на сторінку логіну
-                console.log('No valid auth, redirecting to login...');
+                // Не авторизований - на логін
                 await waitAndRedirect('/login', startTime, MINIMUM_SPLASH_TIME);
 
             } catch (error) {
-                console.error('Splash screen error:', error);
-                // Показуємо помилку
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('error').style.display = 'block';
+                // При помилці - на логін
+                window.location.href = '/login';
             }
         }
 
@@ -377,41 +264,20 @@
             const elapsed = Date.now() - startTime;
             const waitTime = Math.max(0, minTime - elapsed);
 
-            return new Promise(resolve => {
-                setTimeout(() => {
-                    window.location.href = path;
-                    resolve();
-                }, waitTime);
-            });
+            setTimeout(() => {
+                window.location.href = path;
+            }, waitTime);
         }
 
-        // Запускаємо перевірку при завантаженні
-        window.addEventListener('DOMContentLoaded', () => {
-            // Якщо вже є Telegram Web App data, запускаємо одразу
-            if (window.Telegram?.WebApp?.initData) {
-                checkAuth();
-            } else {
-                // Інакше чекаємо трохи на ініціалізацію
-                setTimeout(checkAuth, 100);
-            }
-        });
+        // Запускаємо перевірку одразу
+        checkAuth();
 
-        // Fallback - якщо через 5 секунд нічого не сталось
+        // Fallback редірект
         setTimeout(() => {
-            if (window.location.pathname === '/splash' || window.location.pathname === '/frontend/splash.html') {
-                console.log('Fallback redirect to login');
+            if (window.location.pathname.includes('splash')) {
                 window.location.href = '/login';
             }
-        }, 5000);
-
-        // Обробка помилок
-        window.addEventListener('error', (event) => {
-            console.error('Global error:', event.error);
-        });
-
-        window.addEventListener('unhandledrejection', (event) => {
-            console.error('Unhandled promise rejection:', event.reason);
-        });
+        }, 3000);
     </script>
 </body>
 </html>
