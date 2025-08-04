@@ -135,27 +135,28 @@ def create_app():
 def register_frontend_routes(app):
     """Реєстрація маршрутів для frontend"""
 
-    # Головна сторінка - редірект на splash (ПУБЛІЧНИЙ)
+    # Головна сторінка - показує index.html який автоматично авторизує
     @app.route('/')
     def root():
         """Кореневий маршрут - ПУБЛІЧНИЙ"""
         # Перевіряємо чи це запит від браузера
         if request.headers.get('Accept', '').startswith('text/html'):
-            # Показуємо index.html який редіректить на splash
+            # Показуємо index.html який перевіряє Telegram WebApp
             try:
                 return send_from_directory('../frontend', 'index.html')
             except:
-                # Fallback редірект
+                # Fallback
                 return """
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <meta charset="UTF-8">
                     <title>TeleBoost</title>
-                    <meta http-equiv="refresh" content="0; url=/splash">
+                    <script src="https://telegram.org/js/telegram-web-app.js"></script>
                 </head>
                 <body>
-                    <p>Redirecting...</p>
+                    <h1>TeleBoost</h1>
+                    <p>Please open this app through Telegram bot</p>
                 </body>
                 </html>
                 """
@@ -178,30 +179,20 @@ def register_frontend_routes(app):
             return send_from_directory('../frontend', 'splash.html')
         except Exception as e:
             logger.error(f"Failed to serve splash.html: {e}")
-            # Fallback на логін
+            # Fallback на головну
             return """
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="UTF-8">
                 <title>TeleBoost</title>
-                <meta http-equiv="refresh" content="0; url=/login">
+                <meta http-equiv="refresh" content="0; url=/">
             </head>
             <body>
-                <p>Redirecting to login...</p>
+                <p>Redirecting...</p>
             </body>
             </html>
             """
-
-    # Маршрут для login (ПУБЛІЧНИЙ)
-    @app.route('/login')
-    def login_page():
-        """Сторінка логіну - ПУБЛІЧНИЙ"""
-        try:
-            return send_from_directory('../frontend/pages/login', 'login.html')
-        except Exception as e:
-            logger.error(f"Failed to serve login.html: {e}")
-            return "Login page not found", 404
 
     # Маршрут для home (ПОТРЕБУЄ АВТОРИЗАЦІЇ - але сама сторінка публічна)
     @app.route('/home')
@@ -776,11 +767,11 @@ if __name__ == '__main__':
         logger.info("=" * 50)
         logger.info(f"🚀 Starting TeleBoost API with Frontend")
         logger.info(f"📍 URL: http://{config.HOST}:{config.PORT}")
-        logger.info(f"🌐 Frontend: http://{config.HOST}:{config.PORT}/splash")
+        logger.info(f"🌐 Frontend: http://{config.HOST}:{config.PORT}/")
         logger.info(f"🌍 Environment: {config.ENV}")
         logger.info(f"🐛 Debug Mode: {config.DEBUG}")
         logger.info(f"🔧 Features:")
-        logger.info(f"   - Frontend: ✅ Splash screen at /splash")
+        logger.info(f"   - Frontend: ✅ Telegram WebApp at /")
         logger.info(f"   - Middleware: ✅ All systems active")
         logger.info(f"   - Services: ✅ API integration ready")
         logger.info(f"   - Auth: ✅ JWT + Telegram Web App")
@@ -793,9 +784,8 @@ if __name__ == '__main__':
         logger.info("=" * 50)
         logger.info("")
         logger.info("📌 PUBLIC ROUTES (NO AUTH REQUIRED):")
-        logger.info("   - GET  /              → Splash redirect")
-        logger.info("   - GET  /splash        → Splash screen")
-        logger.info("   - GET  /login         → Login page")
+        logger.info("   - GET  /              → Telegram WebApp check")
+        logger.info("   - GET  /splash        → Loading screen")
         logger.info("   - GET  /home          → Home page (auth checked in JS)")
         logger.info("   - GET  /frontend/*    → Static files")
         logger.info("   - GET  /shared/*      → Shared components")
