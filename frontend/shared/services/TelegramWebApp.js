@@ -19,85 +19,70 @@ class TelegramWebAppService {
    */
   async init() {
     if (this.readyPromise) {
-      return this.readyPromise;
+        return this.readyPromise;
     }
 
     this.readyPromise = new Promise((resolve) => {
-      // Чекаємо повного завантаження сторінки
-      const initialize = async () => {
-        if (!window.Telegram?.WebApp) {
-          console.error('Telegram WebApp not available');
-          resolve(false);
-          return;
-        }
-
-        this.tg = window.Telegram.WebApp;
-
-        // Спробуємо отримати initData кілька разів
-        const tryGetInitData = async () => {
-          this.initAttempts++;
-
-          // Викликаємо ready() тільки на першій спробі
-          if (this.initAttempts === 1) {
-            try {
-              this.tg.ready();
-              console.log('TelegramWebApp: ready() called');
-            } catch (error) {
-              console.error('TelegramWebApp: Error calling ready():', error);
+        const initialize = async () => {
+            if (!window.Telegram?.WebApp) {
+                console.error('Telegram WebApp not available');
+                resolve(false);
+                return;
             }
-          }
 
-          // Чекаємо трохи після ready()
-          await new Promise(r => setTimeout(r, 200));
+            this.tg = window.Telegram.WebApp;
 
-          // Перевіряємо наявність initData
-          const hasInitData = !!this.tg.initData;
-          const initDataLength = this.tg.initData?.length || 0;
+            // Спробуємо отримати initData кілька разів
+            const tryGetInitData = async () => {
+                this.initAttempts++;
 
-          console.log(`TelegramWebApp: Attempt ${this.initAttempts}:`, {
-            hasInitData,
-            initDataLength,
-            platform: this.tg.platform,
-            version: this.tg.version
-          });
+                if (this.initAttempts === 1) {
+                    try {
+                        this.tg.ready();
+                        console.log('TelegramWebApp: ready() called');
+                    } catch (error) {
+                        console.error('TelegramWebApp: Error calling ready():', error);
+                    }
+                }
 
-          if (hasInitData || this.initAttempts >= this.maxAttempts) {
-            this.isReady = true;
-            this.initDataCache = this.tg.initData;
+                // ВАЖЛИВО: Чекаємо після ready()
+                await new Promise(r => setTimeout(r, 200));
 
-            // Налаштовуємо тему
-            this.setupTheme();
+                const hasInitData = !!this.tg.initData;
+                const initDataLength = this.tg.initData?.length || 0;
 
-            console.log('TelegramWebApp: Initialization complete', {
-              success: hasInitData,
-              attempts: this.initAttempts,
-              dataLength: initDataLength
-            });
+                console.log(`TelegramWebApp: Attempt ${this.initAttempts}:`, {
+                    hasInitData,
+                    initDataLength,
+                    platform: this.tg.platform,
+                    version: this.tg.version
+                });
 
-            resolve(hasInitData);
-          } else {
-            // Спробуємо ще раз
-            setTimeout(() => tryGetInitData(), 300);
-          }
+                if (hasInitData || this.initAttempts >= this.maxAttempts) {
+                    this.isReady = true;
+                    this.initDataCache = this.tg.initData;
+                    this.setupTheme();
+                    resolve(hasInitData);
+                } else {
+                    setTimeout(() => tryGetInitData(), 300);
+                }
+            };
+
+            await tryGetInitData();
         };
 
-        // Починаємо спроби
-        await tryGetInitData();
-      };
-
-      // Чекаємо повного завантаження DOM
-      if (document.readyState === 'complete') {
-        // Даємо ще трохи часу для Telegram
-        setTimeout(initialize, 100);
-      } else {
-        window.addEventListener('load', () => {
-          setTimeout(initialize, 100);
-        });
-      }
+        // ВАЖЛИВО: Чекаємо повного завантаження DOM
+        if (document.readyState === 'complete') {
+            setTimeout(initialize, 100);
+        } else {
+            window.addEventListener('load', () => {
+                setTimeout(initialize, 100);
+            });
+        }
     });
 
     return this.readyPromise;
-  }
+}
 
   /**
    * Отримати initData

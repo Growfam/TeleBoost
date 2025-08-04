@@ -400,10 +400,13 @@ export class TelegramAuth {
   /**
    * Перевірка Telegram WebApp
    */
-  async checkTelegramWebApp() {
+async checkTelegramWebApp() {
     // Чекаємо ініціалізації TelegramWebApp сервісу
     const initialized = await telegramWebApp.init();
     this.addDebugInfo(`TelegramWebApp service initialized: ${initialized}`);
+
+    // Даємо додатковий час для стабілізації
+    await new Promise(r => setTimeout(r, 100));
 
     const tg = telegramWebApp.getTelegramWebApp();
 
