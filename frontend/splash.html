@@ -170,6 +170,32 @@
             color: rgba(255, 255, 255, 0.6);
             letter-spacing: 0.5px;
         }
+
+        /* Debug info */
+        .debug-info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #0f0;
+            display: none;
+        }
+
+        .debug-info.show {
+            display: block;
+        }
+
+        .debug-line {
+            margin: 2px 0;
+        }
     </style>
 </head>
 <body>
@@ -221,39 +247,117 @@
         </div>
     </div>
 
+    <!-- Debug info -->
+    <div class="debug-info" id="debug-info"></div>
+
     <script>
+        // Debug mode
+        const isDebug = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const debugInfo = [];
+
+        function addDebugInfo(message) {
+            debugInfo.push(`[${new Date().toISOString()}] ${message}`);
+            console.log(`Splash: ${message}`);
+
+            if (isDebug) {
+                const debugEl = document.getElementById('debug-info');
+                debugEl.classList.add('show');
+                debugEl.innerHTML = debugInfo.map(line => `<div class="debug-line">${line}</div>`).join('');
+                debugEl.scrollTop = debugEl.scrollHeight;
+            }
+        }
+
         // Ініціалізація Telegram Web App
-        if (window.Telegram?.WebApp) {
-            const tg = window.Telegram.WebApp;
-            tg.expand();
-            tg.setHeaderColor('#1a0033');
-            tg.setBackgroundColor('#000000');
-            tg.ready();
+        function initTelegramWebApp() {
+            addDebugInfo('Initializing Telegram WebApp...');
+
+            if (window.Telegram?.WebApp) {
+                const tg = window.Telegram.WebApp;
+
+                // Діагностика перед ready()
+                addDebugInfo(`Before ready() - Platform: ${tg.platform}, Version: ${tg.version}`);
+
+                // НЕ викликаємо ready() одразу - чекаємо повного завантаження
+                return new Promise((resolve) => {
+                    // Чекаємо на повне завантаження DOM та скриптів
+                    if (document.readyState === 'complete') {
+                        setTimeout(() => {
+                            try {
+                                tg.ready();
+                                addDebugInfo('Called tg.ready() after delay');
+
+                                // Налаштування теми
+                                tg.expand();
+                                tg.setHeaderColor('#1a0033');
+                                tg.setBackgroundColor('#000000');
+
+                                addDebugInfo(`After ready() - initData exists: ${!!tg.initData}`);
+                                resolve();
+                            } catch (e) {
+                                addDebugInfo(`Error calling tg.ready(): ${e.message}`);
+                                resolve();
+                            }
+                        }, 300); // Даємо 300мс на повну ініціалізацію
+                    } else {
+                        window.addEventListener('load', () => {
+                            setTimeout(() => {
+                                try {
+                                    tg.ready();
+                                    addDebugInfo('Called tg.ready() after window load');
+
+                                    // Налаштування теми
+                                    tg.expand();
+                                    tg.setHeaderColor('#1a0033');
+                                    tg.setBackgroundColor('#000000');
+
+                                    addDebugInfo(`After ready() - initData exists: ${!!tg.initData}`);
+                                    resolve();
+                                } catch (e) {
+                                    addDebugInfo(`Error calling tg.ready(): ${e.message}`);
+                                    resolve();
+                                }
+                            }, 300);
+                        });
+                    }
+                });
+            } else {
+                addDebugInfo('Telegram WebApp not available');
+                return Promise.resolve();
+            }
         }
 
         // Швидка перевірка авторизації
         async function checkAuth() {
             try {
-                const MINIMUM_SPLASH_TIME = 1000;
+                const MINIMUM_SPLASH_TIME = 1500; // Збільшено до 1.5 секунди
                 const startTime = Date.now();
+
+                // Ініціалізуємо Telegram
+                await initTelegramWebApp();
 
                 // Перевіряємо збережену авторизацію
                 const authData = JSON.parse(localStorage.getItem('auth') || '{}');
+                addDebugInfo(`Auth data exists: ${!!authData.access_token}`);
 
                 if (authData.access_token && authData.expires_at) {
                     const expiresAt = new Date(authData.expires_at);
 
                     if (expiresAt > new Date()) {
                         // Токен валідний - йдемо на головну
+                        addDebugInfo('Valid token found, redirecting to /home');
                         await waitAndRedirect('/home', startTime, MINIMUM_SPLASH_TIME);
                         return;
+                    } else {
+                        addDebugInfo('Token expired');
                     }
                 }
 
                 // Не авторизований - на логін
+                addDebugInfo('No valid auth, redirecting to /login');
                 await waitAndRedirect('/login', startTime, MINIMUM_SPLASH_TIME);
 
             } catch (error) {
+                addDebugInfo(`Auth check error: ${error.message}`);
                 // При помилці - на логін
                 window.location.href = '/login';
             }
@@ -264,20 +368,27 @@
             const elapsed = Date.now() - startTime;
             const waitTime = Math.max(0, minTime - elapsed);
 
+            addDebugInfo(`Waiting ${waitTime}ms before redirect to ${path}`);
+
             setTimeout(() => {
                 window.location.href = path;
             }, waitTime);
         }
 
-        // Запускаємо перевірку одразу
-        checkAuth();
+        // Запускаємо перевірку коли DOM готовий
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', checkAuth);
+        } else {
+            checkAuth();
+        }
 
         // Fallback редірект
         setTimeout(() => {
             if (window.location.pathname.includes('splash')) {
+                addDebugInfo('Fallback redirect to /login');
                 window.location.href = '/login';
             }
-        }, 3000);
+        }, 5000); // Збільшено до 5 секунд
     </script>
 </body>
 </html>
