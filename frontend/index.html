@@ -4,31 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TeleBoost</title>
-    <meta http-equiv="refresh" content="0; url=/splash">
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #000;
-            color: #fff;
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        .redirect-text {
-            opacity: 0.5;
-            font-size: 14px;
-        }
-    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <div class="redirect-text">Перенаправлення...</div>
-
     <script>
-        // Миттєвий редірект на splash screen
-        window.location.href = '/splash';
+        // НІКУДИ НЕ РЕДІРЕКТИМО! Авторизуємось ТУТ!
+
+        // Чекаємо на Telegram WebApp
+        function waitForTelegram() {
+            if (!window.Telegram || !window.Telegram.WebApp) {
+                setTimeout(waitForTelegram, 100);
+                return;
+            }
+
+            const tg = window.Telegram.WebApp;
+
+            // Викликаємо ready
+            tg.ready();
+
+            // Чекаємо на initData
+            setTimeout(() => {
+                if (tg.initData) {
+                    // Є initData - йдемо на splash для красивої анімації
+                    localStorage.setItem('tg_init_data', tg.initData);
+                    window.location.href = '/splash';
+                } else {
+                    // Немає initData - показуємо помилку
+                    document.body.innerHTML = '<h1>Відкрийте через Telegram</h1>';
+                }
+            }, 500);
+        }
+
+        waitForTelegram();
     </script>
 </body>
 </html>

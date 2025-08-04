@@ -5,12 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>TeleBoost - Завантаження...</title>
 
-    <!-- Telegram Web App -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <!-- Global Configuration -->
-    <script src="/frontend/config.js"></script>
-
     <style>
         * {
             margin: 0;
@@ -171,30 +165,32 @@
             letter-spacing: 0.5px;
         }
 
-        /* Debug info */
-        .debug-info {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            right: 20px;
-            max-height: 200px;
-            overflow-y: auto;
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            padding: 12px;
-            font-family: monospace;
-            font-size: 11px;
-            color: #0f0;
-            display: none;
+        /* Error state */
+        .error-container {
+            padding: 20px;
+            text-align: center;
         }
 
-        .debug-info.show {
-            display: block;
+        .error-container h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #ff6b6b;
         }
 
-        .debug-line {
-            margin: 2px 0;
+        .error-container p {
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+
+        .error-container button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -206,7 +202,7 @@
     </div>
 
     <!-- Splash Content -->
-    <div class="splash-container">
+    <div class="splash-container" id="content">
         <!-- Logo -->
         <div class="logo-container">
             <div class="logo-glow"></div>
@@ -247,91 +243,100 @@
         </div>
     </div>
 
-    <!-- Debug info -->
-    <div class="debug-info" id="debug-info"></div>
+    <script>
+        // НЕ ІМПОРТУЄМО НІЧОГО! ПРОСТИЙ КОД!
 
-    <script type="module">
-        import telegramWebApp from '/frontend/shared/services/TelegramWebApp.js';
-
-        // Debug mode
-        const isDebug = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const debugInfo = [];
-
-        function addDebugInfo(message) {
-            debugInfo.push(`[${new Date().toISOString()}] ${message}`);
-            console.log(`Splash: ${message}`);
-
-            if (isDebug) {
-                const debugEl = document.getElementById('debug-info');
-                debugEl.classList.add('show');
-                debugEl.innerHTML = debugInfo.map(line => `<div class="debug-line">${line}</div>`).join('');
-                debugEl.scrollTop = debugEl.scrollHeight;
-            }
-        }
-
-        // Швидка перевірка авторизації
         async function checkAuth() {
+            console.log('Splash: Starting auth check...');
+
+            // Отримуємо збережений initData
+            const initData = localStorage.getItem('tg_init_data');
+
+            if (!initData) {
+                console.log('Splash: No initData found, redirecting to index');
+                window.location.href = '/';
+                return;
+            }
+
+            console.log('Splash: Found initData, length:', initData.length);
+
             try {
-                const MINIMUM_SPLASH_TIME = 2000; // 2 секунди
-                const startTime = Date.now();
-
-                // Ініціалізуємо Telegram WebApp через сервіс
-                addDebugInfo('Initializing Telegram WebApp...');
-                const initialized = await telegramWebApp.init();
-                addDebugInfo(`Telegram WebApp initialized: ${initialized}`);
-
-                // Перевіряємо збережену авторизацію
-                const authData = JSON.parse(localStorage.getItem('auth') || '{}');
-                addDebugInfo(`Auth data exists: ${!!authData.access_token}`);
-
-                if (authData.access_token && authData.expires_at) {
-                    const expiresAt = new Date(authData.expires_at);
-
-                    if (expiresAt > new Date()) {
-                        // Токен валідний - йдемо на головну
-                        addDebugInfo('Valid token found, redirecting to /home');
-                        await waitAndRedirect('/home', startTime, MINIMUM_SPLASH_TIME);
+                // Перевіряємо чи вже є авторизація
+                const existingAuth = localStorage.getItem('auth');
+                if (existingAuth) {
+                    const auth = JSON.parse(existingAuth);
+                    if (auth.expires_at && new Date(auth.expires_at) > new Date()) {
+                        console.log('Splash: Valid auth found, redirecting to home');
+                        setTimeout(() => {
+                            window.location.href = '/home';
+                        }, 1500);
                         return;
-                    } else {
-                        addDebugInfo('Token expired');
                     }
                 }
 
-                // Не авторизований - на логін
-                addDebugInfo('No valid auth, redirecting to /login');
-                await waitAndRedirect('/login', startTime, MINIMUM_SPLASH_TIME);
+                // Відправляємо на бекенд
+                console.log('Splash: Sending auth request...');
+                const response = await fetch('/api/auth/telegram', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        initData: initData
+                    })
+                });
 
+                const data = await response.json();
+                console.log('Splash: Auth response:', data.success ? 'success' : 'failed');
+
+                if (data.success) {
+                    // Зберігаємо токени
+                    localStorage.setItem('auth', JSON.stringify({
+                        access_token: data.data.tokens.access_token,
+                        refresh_token: data.data.tokens.refresh_token,
+                        user: data.data.user,
+                        expires_at: new Date(Date.now() + (data.data.tokens.expires_in || 86400) * 1000).toISOString()
+                    }));
+
+                    // Видаляємо тимчасові дані
+                    localStorage.removeItem('tg_init_data');
+
+                    // Чекаємо 2 секунди для красивої анімації
+                    setTimeout(() => {
+                        window.location.href = '/home';
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || 'Auth failed');
+                }
             } catch (error) {
-                addDebugInfo(`Auth check error: ${error.message}`);
-                // При помилці - на логін
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 1000);
+                console.error('Splash: Auth error:', error);
+
+                // При помилці показуємо кнопку
+                document.getElementById('content').innerHTML = `
+                    <div class="error-container">
+                        <h1>Помилка авторизації</h1>
+                        <p>${error.message}</p>
+                        <button onclick="window.location.href='/'">Спробувати знову</button>
+                    </div>
+                `;
             }
         }
 
-        // Функція для очікування і редіректу
-        async function waitAndRedirect(path, startTime, minTime) {
-            const elapsed = Date.now() - startTime;
-            const waitTime = Math.max(0, minTime - elapsed);
-
-            addDebugInfo(`Waiting ${waitTime}ms before redirect to ${path}`);
-
-            setTimeout(() => {
-                window.location.href = path;
-            }, waitTime);
-        }
-
-        // Запускаємо перевірку
+        // Запускаємо одразу
         checkAuth();
 
-        // Fallback редірект
+        // Fallback - якщо щось пішло не так
         setTimeout(() => {
-            if (window.location.pathname.includes('splash')) {
-                addDebugInfo('Fallback redirect to /login');
-                window.location.href = '/login';
+            if (window.location.pathname === '/splash') {
+                console.log('Splash: Fallback redirect...');
+                const auth = localStorage.getItem('auth');
+                if (auth) {
+                    window.location.href = '/home';
+                } else {
+                    window.location.href = '/';
+                }
             }
-        }, 10000); // 10 секунд
+        }, 10000);
     </script>
 </body>
 </html>

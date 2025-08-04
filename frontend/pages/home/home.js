@@ -9,7 +9,6 @@ import Header from '/frontend/shared/components/Header.js';
 import Navigation from '/frontend/shared/components/Navigation.js';
 import { ToastProvider } from '/frontend/shared/components/Toast.js';
 import AuthGuard from '/frontend/shared/auth/AuthGuard.js';
-import telegramWebApp from '/frontend/shared/services/TelegramWebApp.js';
 
 // Імпорти сервісів
 import { AuthAPI, ServicesAPI, OrdersAPI, StatsAPI } from '/frontend/shared/services/APIClient.js';
@@ -62,9 +61,6 @@ class HomePage {
 
       this.state.user = authData.user;
 
-      // Ініціалізуємо Telegram Web App через централізований сервіс
-      await this.initTelegram();
-
       // Ініціалізуємо компоненти
       this.initComponents();
 
@@ -85,30 +81,6 @@ class HomePage {
 
     } catch (error) {
       this.showError('Помилка завантаження сторінки. Спробуйте оновити.');
-    }
-  }
-
-  /**
-   * Ініціалізація Telegram Web App
-   */
-  async initTelegram() {
-    // Використовуємо централізований сервіс
-    const initialized = await telegramWebApp.init();
-
-    if (initialized) {
-      console.log('HomePage: Telegram WebApp initialized successfully');
-
-      // Отримуємо додаткову інформацію якщо потрібно
-      const tg = telegramWebApp.getTelegramWebApp();
-      if (tg) {
-        console.log('HomePage: Telegram WebApp info:', {
-          platform: tg.platform,
-          version: tg.version,
-          colorScheme: tg.colorScheme
-        });
-      }
-    } else {
-      console.warn('HomePage: Telegram WebApp initialization failed');
     }
   }
 
