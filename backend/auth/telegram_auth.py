@@ -2,7 +2,7 @@
 """
 TeleBoost Telegram Auth
 Перевірка та валідація Telegram Web App даних
-ВИПРАВЛЕНА ВЕРСІЯ
+FIXED: Додано конвертацію telegram_id в string та детальне логування
 """
 import hashlib
 import hmac
@@ -28,38 +28,28 @@ def verify_telegram_data(init_data: str) -> Tuple[bool, Optional[Dict]]:
         (is_valid, user_data) - результат перевірки та дані користувача
     """
     try:
-        logger.info(f"🔐 Received initData length: {len(init_data)}")
-        logger.info(f"🔐 InitData preview: {init_data[:100]}...")
+        logger.info(f"📋 Verifying init_data length: {len(init_data)}")
+        logger.debug(f"📋 Init data preview: {init_data[:100]}...")
 
         # Парсимо init data
         parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
-        logger.info(f"🔐 Parsed data keys: {list(parsed_data.keys())}")
+        logger.debug(f"📋 Parsed data keys: {list(parsed_data.keys())}")
 
         # Отримуємо та видаляємо hash
         received_hash = parsed_data.pop('hash', None)
         if not received_hash:
-            logger.error("🔐 No hash in init data")
-            # Спробуємо без перевірки hash для тестування
-            if config.DEBUG and 'user' in parsed_data:
-                logger.warning("🔐 DEBUG MODE: Skipping hash verification")
-                user_data = parse_user_data(parsed_data.get('user', '{}'))
-                if user_data:
-                    user_data['auth_date'] = parsed_data.get('auth_date', str(int(time.time())))
-                    user_data['start_param'] = parsed_data.get('start_param', '')
-                    return True, user_data
+            logger.error("❌ No hash in init data")
             return False, None
 
-        logger.info(f"🔐 Received hash: {received_hash[:20]}...")
+        logger.debug(f"📋 Received hash: {received_hash}")
 
         # Створюємо data-check-string
         data_check_array = []
         for key in sorted(parsed_data.keys()):
-            value = parsed_data[key]
-            data_check_array.append(f"{key}={value}")
-
+            data_check_array.append(f"{key}={parsed_data[key]}")
         data_check_string = '\n'.join(data_check_array)
-        logger.info(f"🔐 Data check string length: {len(data_check_string)}")
-        logger.info(f"🔐 Data check string preview: {data_check_string[:100]}...")
+
+        logger.debug(f"📋 Data check string length: {len(data_check_string)}")
 
         # Створюємо secret key
         secret_key = hmac.new(
@@ -75,23 +65,14 @@ def verify_telegram_data(init_data: str) -> Tuple[bool, Optional[Dict]]:
             digestmod=hashlib.sha256
         ).hexdigest()
 
-        logger.info(f"🔐 Calculated hash: {calculated_hash[:20]}...")
+        logger.debug(f"📋 Calculated hash: {calculated_hash}")
 
         # Порівнюємо хеші
         if not hmac.compare_digest(received_hash, calculated_hash):
-            logger.error(f"🔐 Hash mismatch!")
-            logger.error(f"🔐 Expected: {calculated_hash}")
-            logger.error(f"🔐 Received: {received_hash}")
-
-            # В DEBUG режимі дозволяємо без валідного хешу
-            if config.DEBUG and 'user' in parsed_data:
-                logger.warning("🔐 DEBUG MODE: Ignoring hash mismatch")
-                user_data = parse_user_data(parsed_data.get('user', '{}'))
-                if user_data:
-                    user_data['auth_date'] = parsed_data.get('auth_date', str(int(time.time())))
-                    user_data['start_param'] = parsed_data.get('start_param', '')
-                    return True, user_data
+            logger.error(f"❌ Hash mismatch: expected {calculated_hash}, got {received_hash}")
             return False, None
+
+        logger.info("✅ Hash verified successfully")
 
         # Перевіряємо auth_date (не старше 24 годин)
         auth_date = parsed_data.get('auth_date')
@@ -99,23 +80,23 @@ def verify_telegram_data(init_data: str) -> Tuple[bool, Optional[Dict]]:
             try:
                 auth_timestamp = int(auth_date)
                 current_timestamp = int(time.time())
-                age_seconds = current_timestamp - auth_timestamp
 
-                logger.info(f"🔐 Auth date age: {age_seconds} seconds")
+                if current_timestamp - auth_timestamp > 86400:  # 24 години
+                    logger.error(f"❌ Init data is too old: {current_timestamp - auth_timestamp} seconds")
+                    return False, None
 
-                if age_seconds > 86400:  # 24 години
-                    logger.error(f"🔐 Init data is too old: {age_seconds} seconds")
-                    # В DEBUG режимі ігноруємо старі дані
-                    if not config.DEBUG:
-                        return False, None
-                    logger.warning("🔐 DEBUG MODE: Ignoring old auth_date")
+                logger.info(f"✅ Auth date is valid: {current_timestamp - auth_timestamp} seconds old")
             except ValueError:
-                logger.error(f"🔐 Invalid auth_date format: {auth_date}")
+                logger.error(f"❌ Invalid auth_date format: {auth_date}")
+                return False, None
 
         # Парсимо user data
-        user_data = parse_user_data(parsed_data.get('user', '{}'))
+        user_json_str = parsed_data.get('user', '{}')
+        logger.debug(f"📋 Raw user JSON: {user_json_str}")
+
+        user_data = parse_user_data(user_json_str)
         if not user_data:
-            logger.error("🔐 Invalid user data")
+            logger.error("❌ Invalid user data")
             return False, None
 
         # Додаємо додаткові дані
@@ -124,11 +105,11 @@ def verify_telegram_data(init_data: str) -> Tuple[bool, Optional[Dict]]:
         user_data['chat_instance'] = parsed_data.get('chat_instance', '')
         user_data['chat_type'] = parsed_data.get('chat_type', '')
 
-        logger.info(f"🔐 Telegram auth successful for user {user_data.get('id')}")
+        logger.info(f"✅ Telegram auth successful for user {user_data.get('id')} ({user_data.get('first_name')})")
         return True, user_data
 
     except Exception as e:
-        logger.error(f"🔐 Telegram auth error: {type(e).__name__}: {str(e)}", exc_info=True)
+        logger.error(f"❌ Telegram auth error: {e}", exc_info=True)
         return False, None
 
 
@@ -143,23 +124,31 @@ def parse_user_data(user_json: str) -> Optional[Dict]:
         Словник з даними або None
     """
     try:
-        logger.info(f"🔐 Parsing user data: {user_json[:100]}...")
-
         # Декодуємо URL encoding якщо є
         user_json = unquote(user_json)
+        logger.debug(f"📋 Decoded user JSON: {user_json}")
 
         # Парсимо JSON
         user_data = json.loads(user_json)
-        logger.info(f"🔐 Parsed user data keys: {list(user_data.keys())}")
+        logger.debug(f"📋 Parsed user data: {json.dumps(user_data, indent=2)}")
 
         # Перевіряємо обов'язкові поля
         if 'id' not in user_data:
-            logger.error("🔐 No 'id' field in user data")
+            logger.error("❌ No 'id' in user data")
             return None
+
+        # КРИТИЧНО: Логуємо тип ID який приходить від Telegram
+        original_id = user_data['id']
+        original_type = type(original_id)
+        logger.info(f"📊 Original Telegram ID type: {original_type}, value: {original_id}")
+
+        # ВАЖЛИВО: Конвертуємо ID в string
+        user_data['id'] = str(user_data['id'])
+        logger.info(f"✅ Converted Telegram ID to string: {user_data['id']}")
 
         # Нормалізуємо дані
         normalized = {
-            'id': str(user_data['id']),  # Завжди string
+            'id': user_data['id'],  # Вже string
             'first_name': user_data.get('first_name', ''),
             'last_name': user_data.get('last_name', ''),
             'username': user_data.get('username', ''),
@@ -171,16 +160,19 @@ def parse_user_data(user_json: str) -> Optional[Dict]:
             'photo_url': user_data.get('photo_url', ''),
         }
 
-        logger.info(f"🔐 Normalized user: id={normalized['id']}, username={normalized['username']}")
+        # Логуємо всі типи для діагностики
+        logger.debug("📊 Normalized data types:")
+        for key, value in normalized.items():
+            logger.debug(f"   {key}: {type(value).__name__} = {value}")
 
         return normalized
 
     except json.JSONDecodeError as e:
-        logger.error(f"🔐 JSON decode error: {e}")
-        logger.error(f"🔐 Invalid JSON: {user_json}")
+        logger.error(f"❌ JSON decode error in user data: {e}")
+        logger.error(f"   Raw JSON: {user_json}")
         return None
     except Exception as e:
-        logger.error(f"🔐 Error parsing user data: {type(e).__name__}: {str(e)}")
+        logger.error(f"❌ Error parsing user data: {e}", exc_info=True)
         return None
 
 
@@ -198,21 +190,24 @@ def extract_referral_code(init_data: str) -> Optional[str]:
         parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
         start_param = parsed_data.get('start_param', '')
 
-        logger.info(f"🔐 Start param: {start_param}")
+        logger.debug(f"📋 Start param: {start_param}")
 
         # start_param може містити реферальний код
         # Наприклад: start_param=ref_ABC12345
         if start_param.startswith('ref_'):
-            return start_param[4:]  # Видаляємо префікс 'ref_'
+            referral_code = start_param[4:]  # Видаляємо префікс 'ref_'
+            logger.info(f"✅ Found referral code: {referral_code}")
+            return referral_code
 
         # Або просто код
         if len(start_param) >= 6:
+            logger.info(f"✅ Found referral code: {start_param}")
             return start_param
 
         return None
 
     except Exception as e:
-        logger.error(f"🔐 Error extracting referral code: {e}")
+        logger.error(f"❌ Error extracting referral code: {e}")
         return None
 
 
@@ -249,8 +244,15 @@ def validate_webapp_request(request_data: Dict) -> bool:
 
     for field in required_fields:
         if field not in request_data:
-            logger.error(f"🔐 Missing required field: {field}")
+            logger.error(f"❌ Missing required field: {field}")
             return False
+
+    # Додатково перевіряємо initDataUnsafe якщо немає initData
+    if not request_data.get('initData') and request_data.get('initDataUnsafe'):
+        logger.warning("⚠️ No initData but has initDataUnsafe - possible browser/debug mode")
+        # В production це має бути заборонено, але для тестування можна дозволити
+        if config.DEBUG:
+            return True
 
     # Перевіряємо підпис
     is_valid, _ = verify_telegram_data(request_data['initData'])
@@ -296,14 +298,56 @@ def is_premium_user(user_data: Dict) -> bool:
     return user_data.get('is_premium', False)
 
 
-# Функція для тестування
-def test_verify_telegram_data():
-    """Тестова функція для перевірки роботи"""
-    # Приклад тестових даних
-    test_data = 'auth_date=1234567890&hash=test_hash&user={"id":123456789,"first_name":"Test","username":"testuser"}'
+# Додаткова функція для діагностики
+def diagnose_init_data(init_data: str) -> Dict:
+    """
+    Діагностика init_data для debugging
 
-    logger.info("🔐 Running test verification...")
-    is_valid, user_data = verify_telegram_data(test_data)
+    Args:
+        init_data: URL-encoded init data
 
-    logger.info(f"🔐 Test result: valid={is_valid}, user_data={user_data}")
-    return is_valid, user_data
+    Returns:
+        Діагностична інформація
+    """
+    try:
+        parsed = dict(parse_qsl(init_data, keep_blank_values=True))
+
+        diagnosis = {
+            'length': len(init_data),
+            'has_hash': 'hash' in parsed,
+            'has_user': 'user' in parsed,
+            'has_auth_date': 'auth_date' in parsed,
+            'fields': list(parsed.keys()),
+            'user_preview': None,
+        }
+
+        if 'user' in parsed:
+            try:
+                user_json = unquote(parsed['user'])
+                user_data = json.loads(user_json)
+                diagnosis['user_preview'] = {
+                    'id': user_data.get('id'),
+                    'id_type': type(user_data.get('id')).__name__,
+                    'username': user_data.get('username'),
+                    'first_name': user_data.get('first_name'),
+                }
+            except:
+                diagnosis['user_preview'] = 'Failed to parse'
+
+        return diagnosis
+
+    except Exception as e:
+        return {'error': str(e)}
+
+
+# Експорт функцій
+__all__ = [
+    'verify_telegram_data',
+    'parse_user_data',
+    'extract_referral_code',
+    'create_webapp_link',
+    'validate_webapp_request',
+    'get_user_display_name',
+    'is_premium_user',
+    'diagnose_init_data',
+]
