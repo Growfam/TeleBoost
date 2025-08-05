@@ -1,5 +1,5 @@
 /* frontend/pages/home/home.css */
-/* Стили для домашней страницы TeleBoost */
+/* Стили для домашньої страницы TeleBoost */
 
 /* === Background Effects === */
 .background-wrapper {
@@ -82,7 +82,7 @@
   margin: 0 auto;
   min-height: 100vh;
   position: relative;
-  padding-bottom: 80px; /* Space for navigation */
+  padding-bottom: 100px; /* Увеличено для навигации */
 }
 
 /* === Main Content === */
@@ -300,6 +300,12 @@
   height: 100%;
   z-index: var(--z-modal);
   pointer-events: none;
+}
+
+/* === Navigation Root Fix === */
+#navigation-root {
+  /* Удаляем любые стили позиционирования */
+  /* Навигация управляется внутри компонента */
 }
 
 /* === Pulse Animation === */

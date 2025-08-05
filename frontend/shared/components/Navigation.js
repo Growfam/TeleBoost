@@ -285,11 +285,11 @@ const styles = `
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(100%);
+    transform: translate(-50%, 100%);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translate(-50%, 0);
   }
 }
 
@@ -326,16 +326,20 @@ const styles = `
   border-radius: 20px;
   padding: 4px;
   display: flex;
+  justify-content: center;
+  align-items: center;
   z-index: 1000;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  max-width: 400px;
-  width: calc(100% - 40px);
+  width: auto;
+  max-width: calc(100% - 40px);
   opacity: 0;
-  transform: translateX(-50%) translateY(100%);
+  visibility: hidden;
 }
 
 .main-navigation.navigation-mounted {
-  animation: slideUp 0.6s ease-out forwards;
+  opacity: 1;
+  visibility: visible;
+  animation: slideUp 0.6s ease-out;
 }
 
 /* Indicator */
@@ -457,6 +461,13 @@ const styles = `
   
   .nav-label {
     font-size: 10px;
+  }
+}
+
+/* Fix for iOS Safari */
+@supports (-webkit-touch-callout: none) {
+  .main-navigation {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 </style>

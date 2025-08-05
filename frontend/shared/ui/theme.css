@@ -220,6 +220,7 @@ a:hover {
   overflow: hidden;
   white-space: nowrap;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn:disabled {
@@ -262,6 +263,7 @@ a:hover {
   border-radius: var(--radius-md);
   backdrop-filter: blur(var(--blur-md));
   transition: all var(--transition-base) var(--ease-in-out);
+  outline: none;
 }
 
 .input:focus, .textarea:focus, .select:focus {
@@ -307,6 +309,11 @@ a:hover {
   outline-offset: 2px;
 }
 
+/* === Tap highlight removal === */
+button, a, input, textarea, select {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* === Utilities === */
 .text-primary { color: var(--text-primary); }
 .text-secondary { color: var(--text-secondary); }
@@ -344,4 +351,11 @@ a:hover {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* === Safe area fix for iOS === */
+@supports (padding: max(0px)) {
+  .main-navigation {
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
 }
