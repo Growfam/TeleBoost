@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#000000">
+    <title>TeleBoost - Мої замовлення</title>
+
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/shared/ui/theme.css">
+    <link rel="stylesheet" href="/shared/ui/glassmorphism.css">
+    <link rel="stylesheet" href="/shared/ui/animations.css">
+    <link rel="stylesheet" href="./orders.css">
+
+    <!-- Config -->
+    <script src="/config.js"></script>
+</head>
+<body>
+    <!-- Background -->
+    <div class="background-container">
+        <div class="background-gradient"></div>
+        <div class="floating-orbs">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="orb orb-3"></div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Header -->
+        <header class="orders-header glass" id="ordersHeader">
+            <button class="back-button glass-button" id="backButton" aria-label="Назад">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="19" y1="12" x2="5" y2="12"/>
+                    <polyline points="12 19 5 12 12 5"/>
+                </svg>
+            </button>
+
+            <h1 class="page-title gradient-text">Мої замовлення</h1>
+
+            <button class="menu-button glass-button" id="menuButton" aria-label="Меню">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Search and Filters -->
+        <div class="search-filter-section animate-fadeInUp">
+            <!-- Search Bar -->
+            <div class="search-bar glass" id="searchBar">
+                <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                </svg>
+                <input
+                    type="text"
+                    class="search-input"
+                    id="searchInput"
+                    placeholder="Пошук по ID або назві..."
+                    autocomplete="off"
+                >
+                <button class="clear-search" id="clearSearch" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="filter-tabs-container">
+                <div class="filter-tabs" id="filterTabs">
+                    <button class="filter-tab active" data-filter="all">
+                        <span>Всі</span>
+                        <span class="filter-count" id="countAll">0</span>
+                    </button>
+                    <button class="filter-tab" data-filter="active">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56" stroke-linecap="round"/>
+                        </svg>
+                        <span>Активні</span>
+                        <span class="filter-count" id="countActive">0</span>
+                    </button>
+                    <button class="filter-tab" data-filter="completed">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9 12l2 2 4-4"/>
+                        </svg>
+                        <span>Виконані</span>
+                        <span class="filter-count" id="countCompleted">0</span>
+                    </button>
+                    <button class="filter-tab" data-filter="cancelled">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="15" y1="9" x2="9" y2="15"/>
+                            <line x1="9" y1="9" x2="15" y2="15"/>
+                        </svg>
+                        <span>Скасовані</span>
+                        <span class="filter-count" id="countCancelled">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sort Options -->
+            <div class="sort-options" id="sortOptions" style="display: none;">
+                <button class="sort-button glass-button" id="sortButton">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                    </svg>
+                    <span>Сортування</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Orders List -->
+        <div class="orders-container">
+            <div class="orders-list" id="ordersList">
+                <!-- Orders will be inserted here dynamically -->
+            </div>
+
+            <!-- Loading State -->
+            <div class="loading-state" id="loadingState" style="display: none;">
+                <div class="skeleton-card glass">
+                    <div class="skeleton-shimmer"></div>
+                </div>
+                <div class="skeleton-card glass">
+                    <div class="skeleton-shimmer"></div>
+                </div>
+                <div class="skeleton-card glass">
+                    <div class="skeleton-shimmer"></div>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <div class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                        <rect x="3" y="3" width="7" height="7" rx="1"/>
+                        <rect x="14" y="3" width="7" height="7" rx="1"/>
+                        <rect x="14" y="14" width="7" height="7" rx="1"/>
+                        <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    </svg>
+                </div>
+                <h2 class="empty-title">Замовлень не знайдено</h2>
+                <p class="empty-text">У вас ще немає замовлень або вони не відповідають фільтру</p>
+                <button class="btn btn-primary" id="createOrderBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span>Створити замовлення</span>
+                </button>
+            </div>
+
+            <!-- Error State -->
+            <div class="error-state" id="errorState" style="display: none;">
+                <div class="error-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.5">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </div>
+                <h2 class="error-title">Помилка завантаження</h2>
+                <p class="error-text" id="errorMessage">Не вдалося завантажити замовлення</p>
+                <button class="btn btn-secondary" id="retryBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                    </svg>
+                    <span>Спробувати знову</span>
+                </button>
+            </div>
+
+            <!-- Load More -->
+            <div class="load-more-container" id="loadMoreContainer" style="display: none;">
+                <button class="btn btn-secondary" id="loadMoreBtn">
+                    <span>Завантажити ще</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <polyline points="19 12 12 19 5 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Details Modal -->
+    <div class="modal-overlay" id="orderModal" style="display: none;">
+        <div class="modal glass-modal">
+            <div class="modal-header">
+                <h2 class="modal-title gradient-text">Деталі замовлення</h2>
+                <button class="close-modal glass-button" id="closeModal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" id="modalContent">
+                <!-- Order details will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="main-navigation" id="navigation">
+        <!-- Navigation component will be inserted here -->
+    </nav>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script type="module" src="./orders.js"></script>
+</body>
+</html>
