@@ -1,38 +1,45 @@
-// frontend/shared/utils/formatters.js (додаток до існуючого файлу)
+// frontend/shared/utils/formatters.js
 /**
- * Форматери для замовлень
- * Додаткові функції для форматування даних
+ * Форматери для TeleBoost
+ * Функції для форматування різних типів даних
  */
+
+import { LOCALE } from './constants.js';
 
 /**
  * Форматування чисел з скороченням
  */
 export function formatNumber(num, short = false) {
-  if (!num) return '0';
+  if (!num && num !== 0) return '0';
 
-  if (short && num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
-  } else if (short && num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K';
+  const number = parseFloat(num);
+
+  if (short && number >= 1000000) {
+    return (number / 1000000).toFixed(1) + 'M';
+  } else if (short && number >= 1000) {
+    return (number / 1000).toFixed(1) + 'K';
   }
 
-  return num.toLocaleString('uk-UA');
+  return number.toLocaleString('uk-UA');
 }
 
 /**
  * Форматування ціни
  */
-export function formatPrice(amount, currency = 'UAH') {
-  if (!amount) return '₴0';
+export function formatPrice(amount, currency = LOCALE.CURRENCY) {
+  if (!amount && amount !== 0) return `${LOCALE.CURRENCY_SYMBOL}0`;
 
   const symbols = {
     UAH: '₴',
     USD: '$',
-    EUR: '€'
+    EUR: '€',
+    GBP: '£'
   };
 
   const symbol = symbols[currency] || currency;
-  return `${symbol}${amount.toFixed(2)}`;
+  const formatted = parseFloat(amount).toFixed(2);
+
+  return `${symbol}${formatted}`;
 }
 
 /**
@@ -64,7 +71,7 @@ export function formatDateTime(dateString) {
 
   // Цього тижня
   if (diffDays < 7) {
-    return `${diffDays} днів тому`;
+    return `${diffDays} ${pluralize(diffDays, 'день', 'дні', 'днів')} тому`;
   }
 
   // Інші дати
@@ -72,6 +79,33 @@ export function formatDateTime(dateString) {
     day: 'numeric',
     month: 'short',
     year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+/**
+ * Форматування дати
+ */
+export function formatDate(dateString) {
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  return date.toLocaleDateString('uk-UA', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+}
+
+/**
+ * Форматування часу
+ */
+export function formatTime(dateString) {
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('uk-UA', {
     hour: '2-digit',
     minute: '2-digit'
   });
@@ -91,22 +125,51 @@ export function getTimeAgo(dateString) {
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
 
-  if (days > 0) {
+  if (years > 0) {
+    return `${years} ${pluralize(years, 'рік', 'роки', 'років')} тому`;
+  } else if (months > 0) {
+    return `${months} ${pluralize(months, 'місяць', 'місяці', 'місяців')} тому`;
+  } else if (weeks > 0) {
+    return `${weeks} ${pluralize(weeks, 'тиждень', 'тижні', 'тижнів')} тому`;
+  } else if (days > 0) {
     return `${days} ${pluralize(days, 'день', 'дні', 'днів')} тому`;
   } else if (hours > 0) {
     return `${hours} ${pluralize(hours, 'годину', 'години', 'годин')} тому`;
   } else if (minutes > 0) {
     return `${minutes} ${pluralize(minutes, 'хвилину', 'хвилини', 'хвилин')} тому`;
+  } else if (seconds > 0) {
+    return `${seconds} ${pluralize(seconds, 'секунду', 'секунди', 'секунд')} тому`;
   } else {
     return 'щойно';
   }
 }
 
 /**
+ * Форматування тривалості
+ */
+export function formatDuration(seconds) {
+  if (!seconds || seconds < 0) return '0 сек';
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  const parts = [];
+  if (hours > 0) parts.push(`${hours} год`);
+  if (minutes > 0) parts.push(`${minutes} хв`);
+  if (secs > 0 || parts.length === 0) parts.push(`${secs} сек`);
+
+  return parts.join(' ');
+}
+
+/**
  * Pluralize українською
  */
-function pluralize(count, one, few, many) {
+export function pluralize(count, one, few, many) {
   const lastDigit = count % 10;
   const lastTwoDigits = count % 100;
 
@@ -121,140 +184,145 @@ function pluralize(count, one, few, many) {
   }
 }
 
-// frontend/shared/utils/constants.js (додаток до існуючого файлу)
 /**
- * Константи для замовлень
+ * Форматування відсотків
  */
-
-export const ORDER_STATUS = {
-  PENDING: 'pending',
-  PROCESSING: 'processing',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  PARTIAL: 'partial',
-  CANCELLED: 'cancelled',
-  FAILED: 'failed'
-};
-
-export const ORDER_STATUS_LABELS = {
-  [ORDER_STATUS.PENDING]: 'Очікує',
-  [ORDER_STATUS.PROCESSING]: 'Обробка',
-  [ORDER_STATUS.IN_PROGRESS]: 'Виконується',
-  [ORDER_STATUS.COMPLETED]: 'Виконано',
-  [ORDER_STATUS.PARTIAL]: 'Частково',
-  [ORDER_STATUS.CANCELLED]: 'Скасовано',
-  [ORDER_STATUS.FAILED]: 'Помилка'
-};
-
-export const SERVICE_CATEGORIES = {
-  TELEGRAM: 'telegram',
-  INSTAGRAM: 'instagram',
-  YOUTUBE: 'youtube',
-  TIKTOK: 'tiktok',
-  FACEBOOK: 'facebook',
-  TWITTER: 'twitter'
-};
-
-// frontend/shared/utils/helpers.js
-/**
- * Допоміжні функції
- */
-
-/**
- * Debounce функція
- */
-export function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
+export function formatPercent(value, decimals = 0) {
+  if (!value && value !== 0) return '0%';
+  return `${parseFloat(value).toFixed(decimals)}%`;
 }
 
 /**
- * Throttle функція
+ * Форматування розміру файлу
  */
-export function throttle(func, limit) {
-  let inThrottle;
-  return function(...args) {
-    if (!inThrottle) {
-      func.apply(this, args);
-      inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
-    }
-  };
+export function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 /**
- * Deep clone об'єкта
+ * Форматування телефону
  */
-export function deepClone(obj) {
-  if (obj === null || typeof obj !== 'object') return obj;
-  if (obj instanceof Date) return new Date(obj.getTime());
-  if (obj instanceof Array) return obj.map(item => deepClone(item));
-  if (obj instanceof Object) {
-    const clonedObj = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        clonedObj[key] = deepClone(obj[key]);
-      }
-    }
-    return clonedObj;
+export function formatPhone(phone) {
+  if (!phone) return '';
+
+  // Видаляємо всі не-цифри
+  const cleaned = phone.replace(/\D/g, '');
+
+  // Форматуємо як +380 XX XXX XX XX
+  if (cleaned.startsWith('380') && cleaned.length === 12) {
+    return `+${cleaned.slice(0, 3)} ${cleaned.slice(3, 5)} ${cleaned.slice(5, 8)} ${cleaned.slice(8, 10)} ${cleaned.slice(10)}`;
+  }
+
+  // Інші формати повертаємо як є
+  return phone;
+}
+
+/**
+ * Обрізати текст
+ */
+export function truncate(text, length = 50, suffix = '...') {
+  if (!text) return '';
+  if (text.length <= length) return text;
+  return text.slice(0, length - suffix.length) + suffix;
+}
+
+/**
+ * Форматування URL
+ */
+export function formatUrl(url) {
+  if (!url) return '';
+
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname + (urlObj.pathname !== '/' ? urlObj.pathname : '');
+  } catch {
+    return url;
   }
 }
 
 /**
- * Generate unique ID
+ * Капіталізація першої літери
  */
-export function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+export function capitalize(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-// frontend/shared/utils/icons.js
 /**
- * Іконки для сервісів
+ * Форматування списку
  */
+export function formatList(items, separator = ', ', lastSeparator = ' та ') {
+  if (!items || items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return items.join(lastSeparator);
 
-export function getServiceIcon(category) {
-  const icons = {
-    telegram: `<svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M21.198 2.433a2.242 2.242 0 0 0-1.022.215l-8.609 3.33c-2.068.8-4.133 1.598-5.724 2.21a405.15 405.15 0 0 1-2.849 1.09c-.42.147-.99.332-1.473.901-.728.968.193 1.798.919 2.112 1.058.46 2.06.745 3.059 1.122 1.074.409 2.156.842 3.23 1.295l-.138-.03c.265.624.535 1.239.804 1.858.382.883.761 1.769 1.137 2.663.19.448.521 1.05 1.08 1.246.885.32 1.694-.244 2.122-.715l1.358-1.493c.858.64 1.708 1.271 2.558 1.921l.033.025c1.153.865 1.805 1.354 2.495 1.592.728.25 1.361.151 1.88-.253.506-.395.748-.987.818-1.486.308-2.17.63-4.335.919-6.507.316-2.378.63-4.764.867-7.158.094-.952.187-1.912.272-2.875.046-.523.153-1.308-.327-1.83a1.743 1.743 0 0 0-.965-.465z"/>
-    </svg>`,
+  const lastItem = items[items.length - 1];
+  const otherItems = items.slice(0, -1);
 
-    instagram: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-    </svg>`,
-
-    youtube: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/>
-      <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/>
-    </svg>`,
-
-    tiktok: `<svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
-    </svg>`,
-
-    facebook: `<svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-    </svg>`,
-
-    twitter: `<svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-    </svg>`,
-
-    default: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="3" y="3" width="7" height="7" rx="1"/>
-      <rect x="14" y="3" width="7" height="7" rx="1"/>
-      <rect x="14" y="14" width="7" height="7" rx="1"/>
-      <rect x="3" y="14" width="7" height="7" rx="1"/>
-    </svg>`
-  };
-
-  return icons[category] || icons.default;
+  return otherItems.join(separator) + lastSeparator + lastItem;
 }
+
+/**
+ * Форматування банківської картки
+ */
+export function formatCardNumber(cardNumber) {
+  if (!cardNumber) return '';
+
+  const cleaned = cardNumber.replace(/\s/g, '');
+  const groups = cleaned.match(/.{1,4}/g) || [];
+
+  return groups.join(' ');
+}
+
+/**
+ * Маскування даних
+ */
+export function maskData(data, visibleStart = 4, visibleEnd = 4) {
+  if (!data || data.length <= visibleStart + visibleEnd) return data;
+
+  const start = data.slice(0, visibleStart);
+  const end = data.slice(-visibleEnd);
+  const masked = '*'.repeat(Math.max(4, data.length - visibleStart - visibleEnd));
+
+  return start + masked + end;
+}
+
+/**
+ * Форматування статусу
+ */
+export function formatStatus(status) {
+  if (!status) return '';
+
+  return status
+    .split('_')
+    .map(word => capitalize(word))
+    .join(' ');
+}
+
+// Експортуємо всі функції
+export default {
+  formatNumber,
+  formatPrice,
+  formatDateTime,
+  formatDate,
+  formatTime,
+  getTimeAgo,
+  formatDuration,
+  pluralize,
+  formatPercent,
+  formatFileSize,
+  formatPhone,
+  truncate,
+  formatUrl,
+  capitalize,
+  formatList,
+  formatCardNumber,
+  maskData,
+  formatStatus
+};

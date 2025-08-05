@@ -5,7 +5,7 @@
  */
 
 import Component from '../../../shared/core/Component.js';
-import { debounce } from '../../../shared/utils/й';
+import { debounce } from '../../../shared/utils/helpers.js';
 
 export default class OrderFilters extends Component {
   constructor(options = {}) {
@@ -651,19 +651,4 @@ if (!document.getElementById('order-filters-styles')) {
   styleElement.id = 'order-filters-styles';
   styleElement.innerHTML = styles;
   document.head.appendChild(styleElement);
-}
-
-// Хелпер функція debounce
-if (!window.debounce) {
-  window.debounce = function(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  };
 }
