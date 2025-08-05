@@ -1,7 +1,7 @@
 // frontend/shared/services/APIClient.js
 /**
  * Базовий API клієнт для взаємодії з backend
- * Містить тільки базову логіку та аутентифікацію
+ * FIXED: Правильна обробка токенів та заголовків
  */
 
 export class APIClient {
@@ -22,7 +22,7 @@ export class APIClient {
     this.isRefreshing = false;
     this.refreshPromise = null;
 
-    // Завантажуємо токени з localStorage
+    // Завантажуємо токени з localStorage при ініціалізації
     this.loadTokens();
   }
 
@@ -35,14 +35,22 @@ export class APIClient {
       this.token = auth.access_token || null;
       this.refreshToken = auth.refresh_token || null;
 
+      console.log('APIClient: Tokens loaded:', {
+        hasToken: !!this.token,
+        hasRefreshToken: !!this.refreshToken,
+        tokenLength: this.token ? this.token.length : 0
+      });
+
       // Перевіряємо термін дії
       if (auth.expires_at) {
         const expiresAt = new Date(auth.expires_at);
         if (expiresAt <= new Date()) {
+          console.log('APIClient: Token expired, clearing...');
           this.clearTokens();
         }
       }
     } catch (e) {
+      console.error('APIClient: Error loading tokens:', e);
       this.clearTokens();
     }
   }
@@ -66,8 +74,10 @@ export class APIClient {
       localStorage.setItem('auth', JSON.stringify(authData));
       this.token = authData.access_token;
       this.refreshToken = authData.refresh_token;
+
+      console.log('APIClient: Tokens saved');
     } catch (e) {
-      // Ignore
+      console.error('APIClient: Error saving tokens:', e);
     }
   }
 
@@ -78,19 +88,21 @@ export class APIClient {
     localStorage.removeItem('auth');
     this.token = null;
     this.refreshToken = null;
+    console.log('APIClient: Tokens cleared');
   }
 
   /**
    * Базовий метод для запитів
    */
   async request(endpoint, options = {}) {
-    // Перезавантажуємо токени перед запитом
+    // Перезавантажуємо токени перед кожним запитом
     if (!options.skipAuth) {
       this.loadTokens();
     }
 
     const url = `${this.baseURL}${endpoint}`;
 
+    // Базова конфігурація
     const config = {
       ...options,
       headers: {
@@ -99,26 +111,51 @@ export class APIClient {
       }
     };
 
-    // Додаємо токен якщо є
+    // КРИТИЧНО: Додаємо токен якщо є
     if (this.token && !options.skipAuth) {
       config.headers.Authorization = `Bearer ${this.token}`;
+      console.log('APIClient: Adding Authorization header, token length:', this.token.length);
+    } else if (!options.skipAuth) {
+      console.warn('APIClient: No token available for authenticated request');
     }
+
+    console.log('APIClient: Request', {
+      method: config.method || 'GET',
+      url,
+      hasAuth: !!config.headers.Authorization,
+      skipAuth: !!options.skipAuth
+    });
 
     try {
       const response = await fetch(url, config);
 
+      console.log('APIClient: Response', {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.url
+      });
+
       // Якщо 401 - пробуємо оновити токен
       if (response.status === 401 && this.refreshToken && !options.skipAuth && !options.isRetry) {
-        await this.refreshAccessToken();
+        console.log('APIClient: Got 401, attempting to refresh token...');
 
-        // Повторюємо запит з новим токеном
-        if (this.token) {
-          return this.request(endpoint, { ...options, isRetry: true });
+        try {
+          await this.refreshAccessToken();
+
+          // Повторюємо запит з новим токеном
+          if (this.token) {
+            console.log('APIClient: Retrying request with new token...');
+            return this.request(endpoint, { ...options, isRetry: true });
+          }
+        } catch (refreshError) {
+          console.error('APIClient: Token refresh failed:', refreshError);
+          // Продовжуємо з оригінальною 401 помилкою
         }
       }
 
       return this.handleResponse(response);
     } catch (error) {
+      console.error('APIClient: Request error:', error);
       this.handleError(error);
     }
   }
@@ -131,8 +168,9 @@ export class APIClient {
 
     try {
       const responseText = await response.text();
-      data = JSON.parse(responseText);
+      data = responseText ? JSON.parse(responseText) : {};
     } catch (e) {
+      console.error('APIClient: Error parsing response:', e);
       if (!response.ok) {
         throw {
           status: response.status,
@@ -144,6 +182,12 @@ export class APIClient {
     }
 
     if (!response.ok) {
+      console.error('APIClient: Request failed:', {
+        status: response.status,
+        error: data.error,
+        code: data.code
+      });
+
       throw {
         status: response.status,
         message: data.error || 'Request failed',
@@ -159,8 +203,11 @@ export class APIClient {
    * Обробка помилок
    */
   handleError(error) {
+    console.error('APIClient: Handle error:', error);
+
     // Якщо втратили авторизацію
     if (error.status === 401 || error.code === 'UNAUTHORIZED') {
+      console.log('APIClient: Unauthorized, clearing tokens and redirecting...');
       this.clearTokens();
       window.dispatchEvent(new CustomEvent('auth:logout'));
       window.location.href = '/login';
@@ -175,6 +222,7 @@ export class APIClient {
   async refreshAccessToken() {
     // Якщо вже оновлюємо - чекаємо
     if (this.isRefreshing) {
+      console.log('APIClient: Already refreshing, waiting...');
       return this.refreshPromise;
     }
 
@@ -185,14 +233,15 @@ export class APIClient {
       body: JSON.stringify({ refresh_token: this.refreshToken }),
       skipAuth: true
     }).then(response => {
+      console.log('APIClient: Token refresh successful');
       if (response.success && response.data) {
         this.saveTokens(response.data);
       } else {
-        this.clearTokens();
-        throw new Error('Failed to refresh token');
+        throw new Error('Invalid refresh response');
       }
       return response;
     }).catch(error => {
+      console.error('APIClient: Token refresh failed:', error);
       this.clearTokens();
       window.dispatchEvent(new CustomEvent('auth:logout'));
       window.location.href = '/login';
@@ -210,9 +259,7 @@ export class APIClient {
     const queryString = new URLSearchParams(params).toString();
     const url = queryString ? `${endpoint}?${queryString}` : endpoint;
 
-    // ДІАГНОСТИКА
-    console.log('APIClient GET request to:', `${this.baseURL}${url}`);
-
+    console.log('APIClient GET:', `${this.baseURL}${url}`);
     return this.request(url, { method: 'GET' });
   }
 
@@ -242,16 +289,16 @@ export class APIClient {
   }
 }
 
-// Singleton instance з примусовим HTTPS
+// Singleton instance
 export const apiClient = new APIClient();
 
-// Додатково переконуємося що глобальний apiClient також використовує HTTPS
+// Переконуємося що apiClient доступний глобально
 if (typeof window !== 'undefined') {
   window.apiClient = apiClient;
 }
 
 /**
- * Auth API - єдиний API в цьому файлі
+ * Auth API
  */
 export const AuthAPI = {
   /**
@@ -269,7 +316,7 @@ export const AuthAPI = {
       };
 
       localStorage.setItem('auth', JSON.stringify(authData));
-      apiClient.loadTokens();
+      apiClient.loadTokens(); // Перезавантажуємо токени
       window.dispatchEvent(new CustomEvent('auth:login', { detail: response.data }));
     }
 
@@ -321,6 +368,7 @@ export const AuthAPI = {
 
 // Обробники глобальних подій
 window.addEventListener('auth:logout', () => {
+  console.log('APIClient: Global logout event received');
   apiClient.clearTokens();
   window.location.href = '/login';
 });

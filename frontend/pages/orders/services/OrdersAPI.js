@@ -1,7 +1,7 @@
 // frontend/pages/orders/services/OrdersAPI.js
 /**
  * API сервіс для роботи з замовленнями
- * Production версія з кешуванням та обробкою помилок
+ * FIXED: Використовує apiClient правильно
  */
 
 import { apiClient } from '../../../shared/services/APIClient.js';
@@ -13,14 +13,18 @@ export class OrdersAPI {
    */
   static async getOrders(params = {}) {
     try {
+      console.log('OrdersAPI: Getting orders with params:', params);
+
       const cacheKey = `orders:${JSON.stringify(params)}`;
 
       // Перевіряємо кеш
       const cached = ordersCache.get(cacheKey);
       if (cached) {
+        console.log('OrdersAPI: Returning cached orders');
         return cached;
       }
 
+      // Запит до API
       const response = await apiClient.get('/orders', {
         page: params.page || 1,
         limit: params.limit || 20,
@@ -29,7 +33,12 @@ export class OrdersAPI {
         sort: params.sort || 'created_at:desc'
       });
 
-      if (response.success) {
+      console.log('OrdersAPI: Got response:', {
+        success: response.success,
+        ordersCount: response.data?.orders?.length || 0
+      });
+
+      if (response.success && response.data) {
         // Кешуємо на 1 хвилину
         ordersCache.set(cacheKey, response.data, 60000);
         return response.data;
@@ -37,7 +46,7 @@ export class OrdersAPI {
 
       throw new Error(response.error || 'Failed to fetch orders');
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('OrdersAPI: Error fetching orders:', error);
       throw error;
     }
   }
@@ -47,17 +56,25 @@ export class OrdersAPI {
    */
   static async getOrderDetails(orderId) {
     try {
+      console.log('OrdersAPI: Getting order details:', orderId);
+
       const cacheKey = `order:${orderId}`;
 
       // Перевіряємо кеш
       const cached = ordersCache.get(cacheKey);
       if (cached) {
+        console.log('OrdersAPI: Returning cached order');
         return cached;
       }
 
       const response = await apiClient.get(`/orders/${orderId}`);
 
-      if (response.success) {
+      console.log('OrdersAPI: Got order details response:', {
+        success: response.success,
+        hasOrder: !!response.data?.order
+      });
+
+      if (response.success && response.data) {
         // Кешуємо на 30 секунд
         ordersCache.set(cacheKey, response.data, 30000);
         return response.data;
@@ -65,7 +82,7 @@ export class OrdersAPI {
 
       throw new Error(response.error || 'Failed to fetch order details');
     } catch (error) {
-      console.error('Error fetching order details:', error);
+      console.error('OrdersAPI: Error fetching order details:', error);
       throw error;
     }
   }
@@ -75,9 +92,16 @@ export class OrdersAPI {
    */
   static async createOrder(orderData) {
     try {
+      console.log('OrdersAPI: Creating order:', orderData);
+
       const response = await apiClient.post('/orders', orderData);
 
-      if (response.success) {
+      console.log('OrdersAPI: Create order response:', {
+        success: response.success,
+        orderId: response.data?.order?.id
+      });
+
+      if (response.success && response.data) {
         // Інвалідуємо кеш списку замовлень
         ordersCache.invalidatePattern('orders:*');
         return response.data;
@@ -85,7 +109,7 @@ export class OrdersAPI {
 
       throw new Error(response.error || 'Failed to create order');
     } catch (error) {
-      console.error('Error creating order:', error);
+      console.error('OrdersAPI: Error creating order:', error);
       throw error;
     }
   }
@@ -95,18 +119,24 @@ export class OrdersAPI {
    */
   static async cancelOrder(orderId) {
     try {
+      console.log('OrdersAPI: Cancelling order:', orderId);
+
       const response = await apiClient.post(`/orders/${orderId}/cancel`);
+
+      console.log('OrdersAPI: Cancel order response:', {
+        success: response.success
+      });
 
       if (response.success) {
         // Інвалідуємо кеш
         ordersCache.delete(`order:${orderId}`);
         ordersCache.invalidatePattern('orders:*');
-        return response.data;
+        return response.data || response;
       }
 
       throw new Error(response.error || 'Failed to cancel order');
     } catch (error) {
-      console.error('Error cancelling order:', error);
+      console.error('OrdersAPI: Error cancelling order:', error);
       throw error;
     }
   }
@@ -116,17 +146,23 @@ export class OrdersAPI {
    */
   static async requestRefill(orderId) {
     try {
+      console.log('OrdersAPI: Requesting refill for order:', orderId);
+
       const response = await apiClient.post(`/orders/${orderId}/refill`);
+
+      console.log('OrdersAPI: Refill response:', {
+        success: response.success
+      });
 
       if (response.success) {
         // Інвалідуємо кеш
         ordersCache.delete(`order:${orderId}`);
-        return response.data;
+        return response.data || response;
       }
 
       throw new Error(response.error || 'Failed to request refill');
     } catch (error) {
-      console.error('Error requesting refill:', error);
+      console.error('OrdersAPI: Error requesting refill:', error);
       throw error;
     }
   }
@@ -136,6 +172,8 @@ export class OrdersAPI {
    */
   static async repeatOrder(orderId) {
     try {
+      console.log('OrdersAPI: Repeating order:', orderId);
+
       // Отримуємо деталі оригінального замовлення
       const orderDetails = await this.getOrderDetails(orderId);
 
@@ -155,21 +193,28 @@ export class OrdersAPI {
 
       return await this.createOrder(newOrderData);
     } catch (error) {
-      console.error('Error repeating order:', error);
+      console.error('OrdersAPI: Error repeating order:', error);
       throw error;
     }
   }
 
   /**
-   * Оновити статус замовлення (перевірка з API)
+   * Оновити статус замовлення
    */
   static async checkOrderStatus(orderId) {
     try {
+      console.log('OrdersAPI: Checking order status:', orderId);
+
       const response = await apiClient.get(`/orders/${orderId}/status`);
+
+      console.log('OrdersAPI: Status check response:', {
+        success: response.success,
+        updated: response.data?.updated
+      });
 
       if (response.success) {
         // Оновлюємо кеш якщо статус змінився
-        if (response.data.updated) {
+        if (response.data?.updated) {
           ordersCache.delete(`order:${orderId}`);
           ordersCache.invalidatePattern('orders:*');
         }
@@ -179,7 +224,7 @@ export class OrdersAPI {
 
       throw new Error(response.error || 'Failed to check order status');
     } catch (error) {
-      console.error('Error checking order status:', error);
+      console.error('OrdersAPI: Error checking order status:', error);
       throw error;
     }
   }
@@ -189,6 +234,8 @@ export class OrdersAPI {
    */
   static async getOrderStatistics() {
     try {
+      console.log('OrdersAPI: Getting order statistics');
+
       const cacheKey = 'orders:statistics';
 
       // Перевіряємо кеш
@@ -199,7 +246,11 @@ export class OrdersAPI {
 
       const response = await apiClient.get('/orders/statistics');
 
-      if (response.success) {
+      console.log('OrdersAPI: Statistics response:', {
+        success: response.success
+      });
+
+      if (response.success && response.data) {
         // Кешуємо на 5 хвилин
         ordersCache.set(cacheKey, response.data, 300000);
         return response.data;
@@ -207,23 +258,25 @@ export class OrdersAPI {
 
       throw new Error(response.error || 'Failed to fetch statistics');
     } catch (error) {
-      console.error('Error fetching order statistics:', error);
+      console.error('OrdersAPI: Error fetching statistics:', error);
       throw error;
     }
   }
 
   /**
-   * Масове оновлення статусів замовлень
+   * Масове оновлення статусів
    */
   static async bulkUpdateStatus(orderIds) {
     try {
+      console.log('OrdersAPI: Bulk updating statuses for', orderIds.length, 'orders');
+
       const promises = orderIds.map(id => this.checkOrderStatus(id));
       const results = await Promise.allSettled(promises);
 
-      const updated = results.filter(r => r.status === 'fulfilled' && r.value.updated).length;
+      const updated = results.filter(r => r.status === 'fulfilled' && r.value?.updated).length;
 
       if (updated > 0) {
-        // Інвалідуємо кеш якщо були оновлення
+        // Інвалідуємо кеш
         ordersCache.invalidatePattern('orders:*');
       }
 
@@ -233,69 +286,13 @@ export class OrdersAPI {
         failed: results.filter(r => r.status === 'rejected').length
       };
     } catch (error) {
-      console.error('Error bulk updating statuses:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Отримати історію замовлень з пагінацією
-   */
-  static async getOrderHistory(page = 1, limit = 20) {
-    try {
-      const response = await apiClient.get('/orders/history', {
-        page,
-        limit,
-        include_service: true
-      });
-
-      if (response.success) {
-        return response.data;
-      }
-
-      throw new Error(response.error || 'Failed to fetch order history');
-    } catch (error) {
-      console.error('Error fetching order history:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Експорт замовлень
-   */
-  static async exportOrders(format = 'csv', filters = {}) {
-    try {
-      const response = await apiClient.get('/orders/export', {
-        format,
-        ...filters
-      });
-
-      if (response.success) {
-        // Завантажуємо файл
-        const blob = new Blob([response.data], {
-          type: format === 'csv' ? 'text/csv' : 'application/pdf'
-        });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `orders_${new Date().toISOString().split('T')[0]}.${format}`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-
-        return true;
-      }
-
-      throw new Error(response.error || 'Failed to export orders');
-    } catch (error) {
-      console.error('Error exporting orders:', error);
+      console.error('OrdersAPI: Error bulk updating:', error);
       throw error;
     }
   }
 }
 
-// Експортуємо хелпер функції для швидкого доступу
+// Експортуємо хелпер функції
 export const ordersAPI = {
   list: (params) => OrdersAPI.getOrders(params),
   get: (id) => OrdersAPI.getOrderDetails(id),
@@ -305,9 +302,7 @@ export const ordersAPI = {
   repeat: (id) => OrdersAPI.repeatOrder(id),
   checkStatus: (id) => OrdersAPI.checkOrderStatus(id),
   statistics: () => OrdersAPI.getOrderStatistics(),
-  bulkStatus: (ids) => OrdersAPI.bulkUpdateStatus(ids),
-  history: (page, limit) => OrdersAPI.getOrderHistory(page, limit),
-  export: (format, filters) => OrdersAPI.exportOrders(format, filters)
+  bulkStatus: (ids) => OrdersAPI.bulkUpdateStatus(ids)
 };
 
 export default OrdersAPI;

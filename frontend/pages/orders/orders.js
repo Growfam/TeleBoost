@@ -1,7 +1,7 @@
 // frontend/pages/orders/orders.js
 /**
  * Основна логіка сторінки замовлень
- * Production версія з підтримкою real-time оновлень
+ * FIXED: Правильна перевірка авторизації
  */
 
 import Navigation from '../../shared/components/Navigation.js';
@@ -11,6 +11,7 @@ import { ordersAPI } from './services/OrdersAPI.js';
 import { ordersRealtime } from './services/OrdersRealtime.js';
 import { formatPrice, formatDateTime, formatNumber } from '../../shared/utils/formatters.js';
 import { ORDER_STATUS } from '../../shared/utils/constants.js';
+import { apiClient } from '../../shared/services/APIClient.js';
 
 // Стан сторінки
 const state = {
@@ -46,34 +47,79 @@ const elements = {
 };
 
 /**
+ * Перевірка авторизації
+ */
+async function checkAuth() {
+  console.log('Orders: Checking authorization...');
+
+  // Перевіряємо наявність токена в localStorage
+  const authData = localStorage.getItem('auth');
+  console.log('Orders: Auth data exists:', !!authData);
+
+  if (!authData) {
+    console.log('Orders: No auth data, redirecting to login');
+    window.location.href = '/login';
+    return false;
+  }
+
+  try {
+    const auth = JSON.parse(authData);
+    console.log('Orders: Auth parsed, has token:', !!auth.access_token);
+
+    if (!auth.access_token) {
+      console.log('Orders: No access token, redirecting to login');
+      window.location.href = '/login';
+      return false;
+    }
+
+    // Перевіряємо чи не прострочений токен
+    if (auth.expires_at) {
+      const expiresAt = new Date(auth.expires_at);
+      const now = new Date();
+      console.log('Orders: Token expires at:', expiresAt);
+      console.log('Orders: Current time:', now);
+
+      if (expiresAt <= now) {
+        console.log('Orders: Token expired, redirecting to login');
+        localStorage.removeItem('auth');
+        window.location.href = '/login';
+        return false;
+      }
+    }
+
+    // Переконуємося що apiClient має токени
+    apiClient.loadTokens();
+    console.log('Orders: ApiClient tokens loaded');
+
+    return true;
+  } catch (error) {
+    console.error('Orders: Auth check error:', error);
+    window.location.href = '/login';
+    return false;
+  }
+}
+
+/**
  * Ініціалізація сторінки
  */
 async function init() {
-  // Перевірка авторизації
+  console.log('Orders: Page initialization started');
+
+  // Перевіряємо авторизацію
+  const isAuthorized = await checkAuth();
+  if (!isAuthorized) {
+    return;
+  }
+
+  console.log('Orders: User is authorized, continuing initialization');
+
+  // Показуємо AuthGuard під час завантаження
   const authGuard = new AuthGuard({
     isLoading: true
   });
-
   authGuard.show();
 
   try {
-    const authCheck = await AuthGuard.check();
-
-    if (!authCheck.isAuthenticated) {
-      authGuard.update({
-        isLoading: false,
-        isAuthenticated: false
-      });
-
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 2000);
-      return;
-    }
-
-    // Ховаємо AuthGuard
-    authGuard.hide();
-
     // Ініціалізуємо компоненти
     initializeToasts();
     initializeNavigation();
@@ -87,12 +133,23 @@ async function init() {
     // Завантажуємо замовлення
     await loadOrders();
 
+    // Ховаємо AuthGuard
+    authGuard.hide();
+
   } catch (error) {
-    console.error('Initialization error:', error);
+    console.error('Orders: Initialization error:', error);
+
     authGuard.update({
       isLoading: false,
-      error: 'Помилка ініціалізації'
+      error: 'Помилка завантаження замовлень'
     });
+
+    // Якщо це 401 помилка - перенаправляємо на логін
+    if (error.status === 401 || error.code === 'UNAUTHORIZED') {
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+    }
   }
 }
 
@@ -187,6 +244,8 @@ function attachEventListeners() {
 async function loadOrders(page = 1) {
   if (state.isLoading) return;
 
+  console.log('Orders: Loading orders, page:', page);
+
   try {
     showLoadingState();
     state.isLoading = true;
@@ -195,6 +254,12 @@ async function loadOrders(page = 1) {
       page,
       limit: 20,
       status: state.currentFilter === 'all' ? undefined : state.currentFilter
+    });
+
+    console.log('Orders: Loaded orders:', {
+      count: response.orders?.length || 0,
+      page: response.pagination?.page,
+      hasMore: response.pagination?.page < response.pagination?.pages
     });
 
     if (page === 1) {
@@ -217,7 +282,15 @@ async function loadOrders(page = 1) {
     trackActiveOrders();
 
   } catch (error) {
-    console.error('Error loading orders:', error);
+    console.error('Orders: Error loading orders:', error);
+
+    // Якщо 401 - перенаправляємо на логін
+    if (error.status === 401) {
+      console.log('Orders: Unauthorized, redirecting to login');
+      window.location.href = '/login';
+      return;
+    }
+
     showErrorState(error.message || 'Не вдалося завантажити замовлення');
   } finally {
     state.isLoading = false;
@@ -527,7 +600,9 @@ async function handleOrderAction(action, orderId) {
     }
   } catch (error) {
     console.error('Action error:', error);
-    window.toast.error(error.message || 'Помилка виконання дії');
+    if (window.showToast) {
+      window.showToast(error.message || 'Помилка виконання дії', 'error');
+    }
   }
 }
 
@@ -658,18 +733,18 @@ function renderOrderDetails(order) {
  */
 async function cancelOrder(orderId) {
   try {
-    const loadingToast = window.toast.loading('Скасування замовлення...');
+    const loadingToast = window.showToast('Скасування замовлення...', 'loading');
 
     const response = await ordersAPI.cancel(orderId);
 
-    window.toast.dismiss(loadingToast);
-    window.toast.success(response.message || 'Замовлення скасовано');
+    window.dismissToast(loadingToast);
+    window.showToast(response.message || 'Замовлення скасовано', 'success');
 
     // Перезавантажуємо список
     await loadOrders();
 
   } catch (error) {
-    window.toast.error(error.message || 'Не вдалося скасувати замовлення');
+    window.showToast(error.message || 'Не вдалося скасувати замовлення', 'error');
   }
 }
 
@@ -678,18 +753,18 @@ async function cancelOrder(orderId) {
  */
 async function repeatOrder(orderId) {
   try {
-    const loadingToast = window.toast.loading('Створення нового замовлення...');
+    const loadingToast = window.showToast('Створення нового замовлення...', 'loading');
 
     const response = await ordersAPI.repeat(orderId);
 
-    window.toast.dismiss(loadingToast);
-    window.toast.success('Нове замовлення створено');
+    window.dismissToast(loadingToast);
+    window.showToast('Нове замовлення створено', 'success');
 
     // Перезавантажуємо список
     await loadOrders();
 
   } catch (error) {
-    window.toast.error(error.message || 'Не вдалося повторити замовлення');
+    window.showToast(error.message || 'Не вдалося повторити замовлення', 'error');
   }
 }
 
@@ -698,15 +773,15 @@ async function repeatOrder(orderId) {
  */
 async function requestRefill(orderId) {
   try {
-    const loadingToast = window.toast.loading('Запит поповнення...');
+    const loadingToast = window.showToast('Запит поповнення...', 'loading');
 
     const response = await ordersAPI.refill(orderId);
 
-    window.toast.dismiss(loadingToast);
-    window.toast.success(response.message || 'Запит на поповнення надіслано');
+    window.dismissToast(loadingToast);
+    window.showToast(response.message || 'Запит на поповнення надіслано', 'success');
 
   } catch (error) {
-    window.toast.error(error.message || 'Не вдалося запросити поповнення');
+    window.showToast(error.message || 'Не вдалося запросити поповнення', 'error');
   }
 }
 
@@ -832,6 +907,12 @@ function debounce(func, wait) {
     timeout = setTimeout(later, wait);
   };
 }
+
+// Обробники глобальних подій
+window.addEventListener('auth:logout', () => {
+  console.log('Orders: Logout event received, redirecting to login');
+  window.location.href = '/login';
+});
 
 // Запускаємо ініціалізацію
 document.addEventListener('DOMContentLoaded', init);

@@ -47,6 +47,8 @@ class AuthMiddleware:
 
         # Додаткові frontend роути
         'serve_splash', 'serve_login', 'serve_home',
+        'orders_page', 'services_page', 'profile_page',
+        'balance_page', 'referrals_page', 'settings_page',
 
         # Frontend assets
         'serve_assets', 'serve_images', 'serve_fonts',
@@ -86,6 +88,12 @@ class AuthMiddleware:
         '/fonts/',
         '/favicon',
         '/.well-known/',
+        '/orders.html',  # <-- ДОДАНО
+        '/services.html',  # <-- ДОДАНО
+        '/profile.html',  # <-- ДОДАНО
+        '/pages/orders/',  # <-- ДОДАНО
+        '/pages/services/',  # <-- ДОДАНО
+        '/pages/profile/',  # <-- ДОДАНО
     ]
 
     # Endpoints with optional authentication
