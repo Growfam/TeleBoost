@@ -1,7 +1,7 @@
 // frontend/pages/home/home.js
 /**
  * Головна сторінка TeleBoost
- * Production версія з централізованим TelegramWebApp сервісом
+ * Production версія з використанням ApiHome
  */
 
 // Імпорти компонентів
@@ -11,7 +11,7 @@ import { ToastProvider } from '/frontend/shared/components/Toast.js';
 import AuthGuard from '/frontend/shared/auth/AuthGuard.js';
 
 // Імпорти сервісів
-import { AuthAPI, ServicesAPI, OrdersAPI, StatsAPI } from '/frontend/shared/services/APIClient.js';
+import HomeAPI, { UserAPI, ServicesAPI, OrdersAPI, StatsAPI } from '/frontend/pages/home/services/ApiHome.js';
 import { realtimeService, RealtimeSubscriptions } from '/frontend/shared/services/RealtimeService.js';
 import { servicesCache, ordersCache, userCache } from '/frontend/shared/services/CacheService.js';
 
@@ -80,6 +80,7 @@ class HomePage {
       }
 
     } catch (error) {
+      console.error('Home page init error:', error);
       this.showError('Помилка завантаження сторінки. Спробуйте оновити.');
     }
   }
@@ -151,59 +152,96 @@ class HomePage {
    */
   async loadInitialData() {
     try {
-      const promises = [
-        this.loadUserBalance(),
-        this.loadServices(),
-        this.loadOrders(),
-        this.loadStats()
-      ];
+      // Використовуємо новий HomeAPI для завантаження всіх даних
+      const homeData = await HomeAPI.loadHomeData();
 
-      const [balanceData, servicesData, ordersData, statsData] = await Promise.allSettled(promises);
+      // Оновлюємо користувача і баланс
+      if (homeData.user?.success && homeData.user.data?.user) {
+        this.state.user = homeData.user.data.user;
+        this.state.balance = homeData.user.data.user.balance || 0;
 
-      // Оновлюємо баланс
-      if (balanceData.status === 'fulfilled' && balanceData.value) {
-        this.state.balance = balanceData.value.balance || 0;
         this.components.balanceCard.update({
           balance: this.state.balance,
           isLoading: false
         });
+
+        // Кешуємо користувача
+        userCache.set('current_user', homeData.user.data.user, 300000);
       }
 
       // Оновлюємо сервіси
-      if (servicesData.status === 'fulfilled' && servicesData.value) {
-        this.state.services = servicesData.value;
+      if (homeData.services?.success && homeData.services.data?.services) {
+        this.state.services = homeData.services.data.services;
         this.components.servicesGrid.update({
-          services: servicesData.value,
+          services: this.state.services,
           isLoading: false
         });
+
+        // Кешуємо сервіси
+        servicesCache.set('telegram_services', this.state.services, 3600000);
       }
 
       // Оновлюємо замовлення
-      if (ordersData.status === 'fulfilled' && ordersData.value) {
-        this.state.orders = ordersData.value;
+      if (homeData.orders?.success && homeData.orders.data?.orders) {
+        this.state.orders = homeData.orders.data.orders;
         this.components.recentOrders.update({
-          orders: ordersData.value,
+          orders: this.state.orders,
           isLoading: false
         });
 
         // Оновлюємо лічильник в навігації
-        const activeOrders = ordersData.value.filter(o =>
+        const activeOrders = this.state.orders.filter(o =>
           ['pending', 'processing', 'in_progress'].includes(o.status)
         ).length;
 
         this.components.navigation.update({
           notifications: { orders: activeOrders, profile: false }
         });
+
+        // Кешуємо замовлення
+        ordersCache.set(`user_orders_${this.state.user.id}`, this.state.orders, 180000);
       }
 
       // Оновлюємо статистику
-      if (statsData.status === 'fulfilled' && statsData.value) {
-        this.state.stats = statsData.value;
-        this.updateStats(statsData.value);
+      if (homeData.stats?.success && homeData.stats.data) {
+        this.state.stats = {
+          totalUsers: homeData.stats.data.total_users || 0,
+          totalOrders: homeData.stats.data.total_orders || 0,
+          successRate: homeData.stats.data.success_rate || 98.5
+        };
+        this.updateStats(this.state.stats);
       }
 
     } catch (error) {
       console.error('Error loading initial data:', error);
+
+      // Пробуємо завантажити дані окремо
+      await this.loadDataSeparately();
+    }
+  }
+
+  /**
+   * Завантаження даних окремо (fallback)
+   */
+  async loadDataSeparately() {
+    try {
+      // Завантажуємо баланс
+      const balancePromise = this.loadUserBalance();
+
+      // Завантажуємо сервіси
+      const servicesPromise = this.loadServices();
+
+      // Завантажуємо замовлення
+      const ordersPromise = this.loadOrders();
+
+      // Завантажуємо статистику
+      const statsPromise = this.loadStats();
+
+      // Чекаємо на всі запити
+      await Promise.allSettled([balancePromise, servicesPromise, ordersPromise, statsPromise]);
+
+    } catch (error) {
+      console.error('Error loading data separately:', error);
     }
   }
 
@@ -212,15 +250,21 @@ class HomePage {
    */
   async loadUserBalance() {
     try {
-      const response = await AuthAPI.getMe();
+      const response = await UserAPI.getMe();
 
       if (response.success && response.data?.user) {
         this.state.user = response.data.user;
+        this.state.balance = response.data.user.balance || 0;
+
+        this.components.balanceCard.update({
+          balance: this.state.balance,
+          isLoading: false
+        });
+
         userCache.set('current_user', response.data.user, 300000);
-        return { balance: response.data.user.balance || 0 };
       }
 
-      return { balance: 0 };
+      return response;
     } catch (error) {
       console.error('Error loading user balance:', error);
       return { balance: 0 };
@@ -234,17 +278,25 @@ class HomePage {
     try {
       const cached = servicesCache.get('telegram_services');
       if (cached) {
+        this.state.services = cached;
+        this.components.servicesGrid.update({
+          services: cached,
+          isLoading: false
+        });
         return cached;
       }
 
-      const response = await ServicesAPI.getAll({
-        category: 'telegram',
-        active: true,
-        limit: 6
-      });
+      const response = await ServicesAPI.getPopular();
 
       if (response.success && response.data?.services) {
         const services = response.data.services;
+        this.state.services = services;
+
+        this.components.servicesGrid.update({
+          services: services,
+          isLoading: false
+        });
+
         servicesCache.set('telegram_services', services, 3600000);
         return services;
       }
@@ -252,6 +304,10 @@ class HomePage {
       return [];
     } catch (error) {
       console.error('Error loading services:', error);
+      this.components.servicesGrid.update({
+        services: [],
+        isLoading: false
+      });
       return [];
     }
   }
@@ -263,16 +319,25 @@ class HomePage {
     try {
       const cached = ordersCache.get(`user_orders_${this.state.user?.id}`);
       if (cached) {
+        this.state.orders = cached;
+        this.components.recentOrders.update({
+          orders: cached,
+          isLoading: false
+        });
         return cached;
       }
 
-      const response = await OrdersAPI.getAll({
-        limit: 5,
-        page: 1
-      });
+      const response = await OrdersAPI.getRecent();
 
       if (response.success && response.data?.orders) {
         const orders = response.data.orders;
+        this.state.orders = orders;
+
+        this.components.recentOrders.update({
+          orders: orders,
+          isLoading: false
+        });
+
         ordersCache.set(`user_orders_${this.state.user.id}`, orders, 180000);
         return orders;
       }
@@ -280,6 +345,10 @@ class HomePage {
       return [];
     } catch (error) {
       console.error('Error loading orders:', error);
+      this.components.recentOrders.update({
+        orders: [],
+        isLoading: false
+      });
       return [];
     }
   }
@@ -292,11 +361,14 @@ class HomePage {
       const response = await StatsAPI.getLive();
 
       if (response.success && response.data) {
-        return {
+        this.state.stats = {
           totalUsers: response.data.total_users || 0,
           totalOrders: response.data.total_orders || 0,
           successRate: response.data.success_rate || 98.5
         };
+
+        this.updateStats(this.state.stats);
+        return this.state.stats;
       }
 
       return this.state.stats;

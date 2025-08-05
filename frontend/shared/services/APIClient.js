@@ -1,7 +1,7 @@
 // frontend/shared/services/APIClient.js
 /**
- * API клієнт для взаємодії з backend
- * Production версія з примусовим HTTPS
+ * Базовий API клієнт для взаємодії з backend
+ * Містить тільки базову логіку та аутентифікацію
  */
 
 export class APIClient {
@@ -209,6 +209,10 @@ export class APIClient {
   async get(endpoint, params = {}) {
     const queryString = new URLSearchParams(params).toString();
     const url = queryString ? `${endpoint}?${queryString}` : endpoint;
+
+    // ДІАГНОСТИКА
+    console.log('APIClient GET request to:', `${this.baseURL}${url}`);
+
     return this.request(url, { method: 'GET' });
   }
 
@@ -246,8 +250,13 @@ if (typeof window !== 'undefined') {
   window.apiClient = apiClient;
 }
 
-// Auth методи
+/**
+ * Auth API - єдиний API в цьому файлі
+ */
 export const AuthAPI = {
+  /**
+   * Авторизація через Telegram
+   */
   async loginWithTelegram(initData) {
     const response = await apiClient.post('/auth/telegram', { initData });
 
@@ -267,6 +276,9 @@ export const AuthAPI = {
     return response;
   },
 
+  /**
+   * Вихід
+   */
   async logout() {
     try {
       await apiClient.post('/auth/logout');
@@ -278,182 +290,32 @@ export const AuthAPI = {
     window.location.href = '/login';
   },
 
+  /**
+   * Отримати поточного користувача
+   */
   async getMe() {
     return apiClient.get('/auth/me');
   },
 
+  /**
+   * Оновити профіль
+   */
   async updateProfile(data) {
     return apiClient.put('/auth/me', data);
   },
 
+  /**
+   * Верифікувати токен
+   */
   async verify() {
     return apiClient.get('/auth/verify');
-  }
-};
-
-// Services API
-export const ServicesAPI = {
-  async getAll(params = {}) {
-    return apiClient.get('/services', params);
   },
 
-  async getById(id) {
-    return apiClient.get(`/services/${id}`);
-  },
-
-  async getCategories() {
-    return apiClient.get('/services/categories');
-  },
-
-  async calculatePrice(data) {
-    return apiClient.post('/services/calculate-price', data);
-  }
-};
-
-// Orders API
-export const OrdersAPI = {
-  async create(data) {
-    return apiClient.post('/orders', data);
-  },
-
-  async getAll(params = {}) {
-    return apiClient.get('/orders', params);
-  },
-
-  async getById(id) {
-    return apiClient.get(`/orders/${id}`);
-  },
-
-  async checkStatus(id) {
-    return apiClient.get(`/orders/${id}/status`);
-  },
-
-  async cancel(id) {
-    return apiClient.post(`/orders/${id}/cancel`);
-  },
-
-  async refill(id) {
-    return apiClient.post(`/orders/${id}/refill`);
-  },
-
-  async calculatePrice(data) {
-    return apiClient.post('/orders/calculate-price', data);
-  },
-
-  async getStatistics() {
-    return apiClient.get('/orders/statistics');
-  }
-};
-
-// Payments API
-export const PaymentsAPI = {
-  async create(data) {
-    return apiClient.post('/payments/create', data);
-  },
-
-  async getById(id) {
-    return apiClient.get(`/payments/${id}`);
-  },
-
-  async check(id) {
-    return apiClient.post(`/payments/${id}/check`);
-  },
-
-  async getAll(params = {}) {
-    return apiClient.get('/payments', params);
-  },
-
-  async getMethods() {
-    return apiClient.get('/payments/methods');
-  },
-
-  async getLimits() {
-    return apiClient.get('/payments/limits');
-  },
-
-  async calculate(data) {
-    return apiClient.post('/payments/calculate', data);
-  }
-};
-
-// Users API
-export const UsersAPI = {
-  async getProfile() {
-    return apiClient.get('/users/profile');
-  },
-
-  async getBalance() {
-    return apiClient.get('/users/balance');
-  },
-
-  async getTransactions(params = {}) {
-    return apiClient.get('/users/transactions', params);
-  },
-
-  async exportTransactions(params = {}) {
-    return apiClient.get('/users/transactions/export', params);
-  },
-
-  async getStatistics() {
-    return apiClient.get('/users/statistics');
-  },
-
-  async createWithdrawal(data) {
-    return apiClient.post('/users/withdraw', data);
-  },
-
-  async getSettings() {
-    return apiClient.get('/users/settings');
-  },
-
-  async updateSettings(data) {
-    return apiClient.put('/users/settings', data);
-  },
-
-  async getNotifications(params = {}) {
-    return apiClient.get('/users/notifications', params);
-  },
-
-  async markNotificationRead(id) {
-    return apiClient.post(`/users/notifications/${id}/read`);
-  },
-
-  async getActivity() {
-    return apiClient.get('/users/activity');
-  }
-};
-
-// Referrals API
-export const ReferralsAPI = {
-  async getStats() {
-    return apiClient.get('/referrals/stats');
-  },
-
-  async getLink() {
-    return apiClient.get('/referrals/link');
-  },
-
-  async getList(params = {}) {
-    return apiClient.get('/referrals/list', params);
-  },
-
-  async getTree() {
-    return apiClient.get('/referrals/tree');
-  },
-
-  async getEarnings(period = 'all') {
-    return apiClient.get('/referrals/earnings', { period });
-  },
-
-  async getPromoMaterials() {
-    return apiClient.get('/referrals/promo-materials');
-  }
-};
-
-// Statistics API (public)
-export const StatsAPI = {
-  async getLive() {
-    return apiClient.get('/statistics/live');
+  /**
+   * Оновити токен
+   */
+  async refresh() {
+    return apiClient.refreshAccessToken();
   }
 };
 
