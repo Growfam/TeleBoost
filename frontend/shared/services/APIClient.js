@@ -6,17 +6,16 @@
 
 export class APIClient {
   constructor() {
-    // ПРИМУСОВО HTTPS!
-    const configUrl = window.CONFIG?.API_URL || 'https://teleboost-teleboost.up.railway.app/api';
+    // ЗАВЖДИ використовуємо HTTPS для Railway!
+    let configUrl = window.CONFIG?.API_URL || 'https://teleboost-teleboost.up.railway.app/api';
 
-    // Якщо ми на HTTPS - примусово міняємо API URL на HTTPS
-    if (window.location.protocol === 'https:') {
-        this.baseURL = configUrl.replace('http://', 'https://');
-    } else {
-        this.baseURL = configUrl;
+    // Примусово змінюємо HTTP на HTTPS
+    if (configUrl.startsWith('http://')) {
+      configUrl = configUrl.replace('http://', 'https://');
     }
 
-    console.log('APIClient initialized with:', this.baseURL); // Для перевірки
+    this.baseURL = configUrl;
+    console.log('APIClient initialized with HTTPS:', this.baseURL);
 
     this.token = null;
     this.refreshToken = null;
@@ -464,4 +463,4 @@ window.addEventListener('auth:logout', () => {
   window.location.href = '/login';
 });
 
-export default apiClient
+export default apiClient;

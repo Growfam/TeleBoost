@@ -1,12 +1,15 @@
 // frontend/config.js
 /**
  * Глобальна конфігурація TeleBoost
- * Production версія
+ * Production версія з HTTPS
  */
 
 window.CONFIG = {
-  // API настройки
+  // API настройки - ЗАВЖДИ HTTPS для Railway!
   API_URL: 'https://teleboost-teleboost.up.railway.app/api',
+
+  // Frontend URL
+  APP_URL: 'https://teleboost-teleboost.up.railway.app',
 
   // Telegram Bot
   BOT_USERNAME: 'TeleeBoost_bot',
@@ -23,5 +26,11 @@ window.CONFIG = {
   },
 
   // Версія додатку
-  VERSION: '1.0.0'
+  VERSION: '1.0.0',
+
+  // Environment
+  ENV: 'production',
+
+  // Debug mode
+  DEBUG: false
 };

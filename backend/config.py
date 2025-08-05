@@ -27,13 +27,13 @@ class Config:
     PORT = int(os.getenv('PORT', 5000))
     HOST = '0.0.0.0'  # Railway вимагає 0.0.0.0
 
-    # URLs - використовуємо змінні з Railway
-    BACKEND_URL = os.getenv('API_URL', 'https://teleboost-teleboost.up.railway.app')
-    FRONTEND_URL = os.getenv('APP_URL', 'https://teleboost-teleboost.up.railway.app')
+    # URLs - ЗАВЖДИ HTTPS для Railway!
+    BACKEND_URL = 'https://teleboost-teleboost.up.railway.app'
+    FRONTEND_URL = 'https://teleboost-teleboost.up.railway.app'
 
     # Додаткові URL для сумісності
-    API_URL = os.getenv('API_URL', BACKEND_URL)
-    APP_URL = os.getenv('APP_URL', FRONTEND_URL)
+    API_URL = BACKEND_URL
+    APP_URL = FRONTEND_URL
 
     # Database - Supabase (виправлено відповідно до Railway)
     SUPABASE_URL = os.getenv('SUPABASE_URL', '')
@@ -105,7 +105,7 @@ class Config:
     RATELIMIT_DEFAULT = "100 per hour"
     RATELIMIT_HEADERS_ENABLED = True
 
-    # CORS
+    # CORS - оновлено для підтримки Telegram Web App
     CORS_ORIGINS = [
         "https://web.telegram.org",
         "https://telegram.org",
@@ -124,7 +124,7 @@ class Config:
     # Security Headers
     SECURITY_HEADERS = {
         'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
+        'X-Frame-Options': 'SAMEORIGIN',  # Змінено з DENY для Telegram Web App
         'X-XSS-Protection': '1; mode=block',
         'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     }
@@ -183,8 +183,8 @@ class Config:
     # Session
     SESSION_COOKIE_NAME = 'teleboost_session'
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SECURE = not DEBUG  # HTTPS only in production
-    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = True  # HTTPS only
+    SESSION_COOKIE_SAMESITE = 'None'  # Для Telegram Web App
     PERMANENT_SESSION_LIFETIME = timedelta(days=30)
 
     # Error Tracking (Sentry)

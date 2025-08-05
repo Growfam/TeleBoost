@@ -89,7 +89,9 @@ def create_app():
     # Встановлюємо секретний ключ
     app.secret_key = config.SECRET_KEY
 
-    # CORS налаштування
+    # CORS налаштування з додатковим логуванням
+    logger.info(f"CORS configured for origins: {config.CORS_ORIGINS}")
+
     CORS(app,
          origins=config.CORS_ORIGINS,
          supports_credentials=True,
@@ -111,6 +113,38 @@ def create_app():
              'X-Server-Memory'
          ])
 
+    # Додатковий CORS middleware для діагностики
+    @app.before_request
+    def log_cors_request():
+        """Логування CORS запитів для діагностики"""
+        origin = request.headers.get('Origin')
+        if origin:
+            logger.info(f"CORS Request from origin: {origin}")
+            logger.info(f"Request URL: {request.url}")
+            logger.info(f"Request Method: {request.method}")
+
+            # Перевіряємо чи origin дозволений
+            if origin not in config.CORS_ORIGINS:
+                logger.warning(f"Origin {origin} not in allowed origins: {config.CORS_ORIGINS}")
+
+    @app.after_request
+    def ensure_cors_headers(response):
+        """Переконуємося що CORS заголовки встановлені правильно"""
+        origin = request.headers.get('Origin')
+
+        if origin and origin in config.CORS_ORIGINS:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+
+            # Для preflight запитів
+            if request.method == 'OPTIONS':
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+                response.headers[
+                    'Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, X-Telegram-Init-Data'
+                response.headers['Access-Control-Max-Age'] = '3600'
+
+        return response
+
     # Ініціалізація всіх middleware
     init_middleware(app)
 
@@ -128,6 +162,7 @@ def create_app():
     register_frontend_routes(app)
 
     logger.info("✅ Flask app created successfully")
+    logger.info(f"✅ Using HTTPS URLs: Backend={config.BACKEND_URL}, Frontend={config.FRONTEND_URL}")
 
     return app
 
@@ -766,8 +801,8 @@ if __name__ == '__main__':
         # Інформація про запуск
         logger.info("=" * 50)
         logger.info(f"🚀 Starting TeleBoost API with Frontend")
-        logger.info(f"📍 URL: http://{config.HOST}:{config.PORT}")
-        logger.info(f"🌐 Frontend: http://{config.HOST}:{config.PORT}/")
+        logger.info(f"📍 URL: https://{config.HOST}:{config.PORT}")
+        logger.info(f"🌐 Frontend: https://{config.HOST}:{config.PORT}/")
         logger.info(f"🌍 Environment: {config.ENV}")
         logger.info(f"🐛 Debug Mode: {config.DEBUG}")
         logger.info(f"🔧 Features:")
@@ -781,6 +816,7 @@ if __name__ == '__main__':
         logger.info(f"   - Payments: ✅ CryptoBot + NOWPayments")
         logger.info(f"   - Orders: ✅ Full order management system")
         logger.info(f"   - Scheduler: {'✅ Background tasks active' if scheduler else '⚠️ Background tasks disabled'}")
+        logger.info(f"   - CORS: ✅ Configured for {len(config.CORS_ORIGINS)} origins")
         logger.info("=" * 50)
         logger.info("")
         logger.info("📌 PUBLIC ROUTES (NO AUTH REQUIRED):")
